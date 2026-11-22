@@ -1,4 +1,37 @@
 services:
+  api:
+    build:
+      context: ./apps/api
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: 3000
+      DATABASE_URL: postgres://${POSTGRES_USER:-homedash}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-homedash}
+      CORS_ORIGIN: ${CORS_ORIGIN:?Set CORS_ORIGIN}
+      SESSION_TTL_DAYS: ${SESSION_TTL_DAYS:-30}
+      BOOTSTRAP_USERNAME: ${BOOTSTRAP_USERNAME:-}
+      BOOTSTRAP_PASSWORD: ${BOOTSTRAP_PASSWORD:-}
+      NOTIFICATION_CENTER_URL: ${NOTIFICATION_CENTER_URL:-}
+      NOTIFICATION_CENTER_READ_TOKEN: ${NOTIFICATION_CENTER_READ_TOKEN:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - homedash-internal
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ./apps/web
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8080:80"
+    networks:
+      - homedash-internal
+    restart: unless-stopped
+
   postgres:
     image: postgres:16-alpine
     environment:
@@ -14,6 +47,12 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+    networks:
+      - homedash-internal
 
 volumes:
   homedash-postgres-data:
+
+networks:
+  homedash-internal:
+    driver: bridge

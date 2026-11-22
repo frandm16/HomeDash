@@ -44,6 +44,15 @@ export async function buildApp(): Promise<FastifyInstance> {
     }
   })
   app.get('/health/live', async () => ({ status: 'ok' }))
+  app.get('/health/ready', async (_request, reply) => {
+    try {
+      await pool.query('SELECT 1')
+      return { status: 'ready' }
+    } catch {
+      return reply.code(503).send({ status: 'not_ready' })
+    }
+  })
+  app.get('/metrics', async () => ({ status: 'ok', uptimeSeconds: Math.round(process.uptime()) }))
 
   app.post('/api/v1/auth/login', {
     config: { rateLimit: { max: 5, timeWindow: '1 minute' } },
@@ -94,7 +103,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   })
 
   app.addHook('preHandler', async (request, reply) => {
-    if (request.url === '/health' || request.url === '/health/live' || request.url.startsWith('/api/v1/auth/')) return
+    if (request.url === '/health' || request.url === '/health/live' || request.url === '/health/ready' || request.url === '/metrics' || request.url.startsWith('/api/v1/auth/')) return
     const session = await requireAuth(request, reply)
     if (session && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(request.method) && !verifyCsrf(request, session.csrfToken)) {
       return reply.code(403).send({ error: 'CSRF validation failed' })

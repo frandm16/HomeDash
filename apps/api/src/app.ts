@@ -12,6 +12,7 @@ import * as dashboardRepository from './infrastructure/db/repositories/dashboard
 import { createDevelopmentSources, createSnapshotService } from './snapshot.js'
 import * as authService from './auth.js'
 import { recordAudit as defaultRecordAudit } from './infrastructure/audit.js'
+import { incrementMetric, metricsText, observeMetric } from './infrastructure/observability.js'
 
 export type AppDependencies = {
   auth?: Pick<typeof authService, 'authenticate' | 'createSession' | 'getSession' | 'revokeAllSessions' | 'revokeSession' | 'requireAuth'>
@@ -46,6 +47,12 @@ export async function buildApp(dependencies: AppDependencies = {}): Promise<Fast
   })
   const snapshotService = createSnapshotService(createDevelopmentSources())
 
+  app.addHook('onResponse', async (request, reply) => {
+    const route = request.routeOptions.url ?? 'unknown'
+    incrementMetric('homedash_http_requests_total', { method: request.method, route, status: String(reply.statusCode) })
+    observeMetric('homedash_http_request_duration_seconds', reply.elapsedTime / 1000, { method: request.method, route })
+  })
+
   app.setErrorHandler((error, request, reply) => {
     const fastifyError = error as { validation?: unknown; statusCode?: number }
     if (fastifyError.validation) {
@@ -68,13 +75,19 @@ export async function buildApp(dependencies: AppDependencies = {}): Promise<Fast
   app.get('/health/live', async () => ({ status: 'ok' }))
   app.get('/health/ready', async (_request, reply) => {
     try {
-      await pool.query('SELECT 1')
-      return { status: 'ready' }
+      const result = await pool.query<{ applied: boolean }>(`SELECT EXISTS (
+        SELECT 1 FROM schema_migrations WHERE version = 1
+      ) AS applied`)
+      if (!result.rows[0]?.applied) return reply.code(503).send({ status: 'not_ready', checks: { database: 'ready', migrations: 'pending' } })
+      return { status: 'ready', checks: { database: 'ready', migrations: 'ready' } }
     } catch {
-      return reply.code(503).send({ status: 'not_ready' })
+      return reply.code(503).send({ status: 'not_ready', checks: { database: 'unavailable', migrations: 'unknown' } })
     }
   })
-  app.get('/metrics', async () => ({ status: 'ok', uptimeSeconds: Math.round(process.uptime()) }))
+  app.get('/metrics', async (_request, reply) => {
+    reply.type('text/plain; version=0.0.4')
+    return metricsText()
+  })
 
   app.post('/api/v1/auth/login', {
     config: { rateLimit: { max: 5, timeWindow: '1 minute' } },
@@ -136,12 +149,12 @@ export async function buildApp(dependencies: AppDependencies = {}): Promise<Fast
 
   app.get('/api/v1/widgets/definitions', async () => ({ widgets: listWidgetDefinitions() }))
   app.get('/api/v1/dashboards', async (request) => ({ dashboards: await dashboard.listDashboards(request.auth!.user.id) }))
-  app.post('/api/v1/dashboards', { schema: { body: dashboardNameBody } }, async (request, reply) => reply.code(201).send(await dashboard.createDashboard(request.auth!.user.id, request.body as { name: string })))
-  app.patch('/api/v1/dashboards/:dashboardId', { schema: { body: dashboardNameBody } }, async (request, reply) => { const result = await dashboard.updateDashboard(request.auth!.user.id, (request.params as { dashboardId: string }).dashboardId, request.body as { name: string }); return result ?? reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Dashboard not found', requestId: request.id } }) })
-  app.delete('/api/v1/dashboards/:dashboardId', async (request, reply) => { if (!await dashboard.deleteDashboard(request.auth!.user.id, (request.params as { dashboardId: string }).dashboardId)) return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Dashboard not found or cannot be deleted', requestId: request.id } }); return { ok: true } })
+  app.post('/api/v1/dashboards', { schema: { body: dashboardNameBody } }, async (request, reply) => { const dashboardResult = await dashboard.createDashboard(request.auth!.user.id, request.body as { name: string }); if (dashboardResult) await recordAudit({ userId: request.auth!.user.id, action: 'create', resourceType: 'dashboard', resourceId: dashboardResult.id }); return reply.code(201).send(dashboardResult) })
+  app.patch('/api/v1/dashboards/:dashboardId', { schema: { body: dashboardNameBody } }, async (request, reply) => { const id = (request.params as { dashboardId: string }).dashboardId; const result = await dashboard.updateDashboard(request.auth!.user.id, id, request.body as { name: string }); if (!result) return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Dashboard not found', requestId: request.id } }); await recordAudit({ userId: request.auth!.user.id, action: 'update', resourceType: 'dashboard', resourceId: id }); return result })
+  app.delete('/api/v1/dashboards/:dashboardId', async (request, reply) => { const id = (request.params as { dashboardId: string }).dashboardId; if (!await dashboard.deleteDashboard(request.auth!.user.id, id)) return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Dashboard not found or cannot be deleted', requestId: request.id } }); await recordAudit({ userId: request.auth!.user.id, action: 'delete', resourceType: 'dashboard', resourceId: id }); return { ok: true } })
   app.get('/api/v1/profiles', async (request) => ({ profiles: await dashboard.listProfiles(request.auth!.user.id) }))
   app.get('/api/v1/dashboards/:dashboardId/profiles', async (request) => ({ profiles: await dashboard.listProfiles(request.auth!.user.id, (request.params as { dashboardId: string }).dashboardId) }))
-  app.patch('/api/v1/profiles/:profileId', async (request, reply) => { const result = await dashboard.updateProfile(request.auth!.user.id, (request.params as { profileId: string }).profileId, request.body as { layoutVersion?: number }); return result ?? reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Profile not found', requestId: request.id } }) })
+  app.patch('/api/v1/profiles/:profileId', async (request, reply) => { const id = (request.params as { profileId: string }).profileId; const result = await dashboard.updateProfile(request.auth!.user.id, id, request.body as { layoutVersion?: number }); if (!result) return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Profile not found', requestId: request.id } }); await recordAudit({ userId: request.auth!.user.id, action: 'update', resourceType: 'profile', resourceId: id }); return result })
   app.get('/api/v1/profiles/:profileId/widgets', async (request) => {
     const params = request.params as { profileId: string }
     return { widgets: await dashboard.listWidgets(request.auth!.user.id, params.profileId) }
@@ -152,12 +165,15 @@ export async function buildApp(dependencies: AppDependencies = {}): Promise<Fast
     const params = request.params as { profileId: string }
     const body = request.body as { widgetType: string; configuration?: unknown; layout?: unknown }
     if (!isWidgetTypeAllowed(body.widgetType)) return reply.code(400).send({ error: { code: 'INVALID_WIDGET_TYPE', message: 'Unknown widget type', requestId: request.id } })
-    return reply.code(201).send(await dashboard.createWidget(request.auth!.user.id, params.profileId, body))
+    const widget = await dashboard.createWidget(request.auth!.user.id, params.profileId, body)
+    if (widget) await recordAudit({ userId: request.auth!.user.id, action: 'create', resourceType: 'widget', resourceId: widget.id })
+    return reply.code(201).send(widget)
   })
-  app.patch('/api/v1/widgets/:widgetId', async (request, reply) => { const result = await dashboard.updateWidget(request.auth!.user.id, (request.params as { widgetId: string }).widgetId, request.body as { configuration?: unknown; layout?: unknown; isEnabled?: boolean }, request.headers['if-unmodified-since']); return result ?? reply.code(409).send({ error: { code: 'CONFLICT', message: 'Widget was modified or not found', requestId: request.id } }) })
+  app.patch('/api/v1/widgets/:widgetId', async (request, reply) => { const id = (request.params as { widgetId: string }).widgetId; const result = await dashboard.updateWidget(request.auth!.user.id, id, request.body as { configuration?: unknown; layout?: unknown; isEnabled?: boolean }, request.headers['if-unmodified-since']); if (!result) return reply.code(409).send({ error: { code: 'CONFLICT', message: 'Widget was modified or not found', requestId: request.id } }); await recordAudit({ userId: request.auth!.user.id, action: 'update', resourceType: 'widget', resourceId: id }); return result })
   app.delete('/api/v1/widgets/:widgetId', async (request, reply) => {
     const params = request.params as { widgetId: string }
     if (!await dashboard.deleteWidget(request.auth!.user.id, params.widgetId)) return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Widget not found', requestId: request.id } })
+    await recordAudit({ userId: request.auth!.user.id, action: 'delete', resourceType: 'widget', resourceId: params.widgetId })
     return { ok: true }
   })
   app.get('/api/v1/profiles/:profileId/bookmarks', async (request) => {
@@ -170,13 +186,16 @@ export async function buildApp(dependencies: AppDependencies = {}): Promise<Fast
     const params = request.params as { profileId: string }
     const body = request.body as { name: string; url: string; icon?: string; category?: string }
     if (!['http:', 'https:'].includes(new URL(body.url).protocol) || new URL(body.url).username || new URL(body.url).password) return reply.code(400).send({ error: { code: 'INVALID_URL', message: 'Only public HTTP and HTTPS URLs are allowed', requestId: request.id } })
-    return reply.code(201).send(await dashboard.createBookmark(request.auth!.user.id, params.profileId, body))
+    const bookmark = await dashboard.createBookmark(request.auth!.user.id, params.profileId, body)
+    if (bookmark) await recordAudit({ userId: request.auth!.user.id, action: 'create', resourceType: 'bookmark', resourceId: bookmark.id })
+    return reply.code(201).send(bookmark)
   })
-  app.patch('/api/v1/bookmarks/:bookmarkId', async (request, reply) => { const result = await dashboard.updateBookmark(request.auth!.user.id, (request.params as { bookmarkId: string }).bookmarkId, request.body as { name?: string; url?: string; icon?: string; category?: string; sortOrder?: number }); return result ?? reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Bookmark not found', requestId: request.id } }) })
-  app.delete('/api/v1/bookmarks/:bookmarkId', async (request, reply) => { if (!await dashboard.deleteBookmark(request.auth!.user.id, (request.params as { bookmarkId: string }).bookmarkId)) return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Bookmark not found', requestId: request.id } }); return { ok: true } })
+  app.patch('/api/v1/bookmarks/:bookmarkId', async (request, reply) => { const id = (request.params as { bookmarkId: string }).bookmarkId; const result = await dashboard.updateBookmark(request.auth!.user.id, id, request.body as { name?: string; url?: string; icon?: string; category?: string; sortOrder?: number }); if (!result) return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Bookmark not found', requestId: request.id } }); await recordAudit({ userId: request.auth!.user.id, action: 'update', resourceType: 'bookmark', resourceId: id }); return result })
+  app.delete('/api/v1/bookmarks/:bookmarkId', async (request, reply) => { const id = (request.params as { bookmarkId: string }).bookmarkId; if (!await dashboard.deleteBookmark(request.auth!.user.id, id)) return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Bookmark not found', requestId: request.id } }); await recordAudit({ userId: request.auth!.user.id, action: 'delete', resourceType: 'bookmark', resourceId: id }); return { ok: true } })
 
   app.get('/api/v1/events', async (request, reply) => {
     if (!request.auth) return reply.code(401).send({ error: 'Authentication required' })
+    incrementMetric('homedash_sse_connections_total')
     reply.hijack()
     const response = reply.raw
     response.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive', 'X-Accel-Buffering': 'no' })
@@ -186,7 +205,7 @@ export async function buildApp(dependencies: AppDependencies = {}): Promise<Fast
     send(heartbeatEvent())
     const unsubscribe = subscribeEvents(send)
     const heartbeat = setInterval(() => send(heartbeatEvent()), 25_000)
-    request.raw.on('close', () => { clearInterval(heartbeat); unsubscribe() })
+    request.raw.on('close', () => { clearInterval(heartbeat); unsubscribe(); incrementMetric('homedash_sse_disconnects_total') })
   })
 
   app.get('/api/v1/dashboard', async (_request, reply) => {

@@ -9,6 +9,7 @@ const sessionTtlMs = config.sessionTtlDays * 24 * 60 * 60 * 1000
 
 type User = { id: string; username: string }
 type Session = { user: User; token: string; expiresAt: Date; csrfToken: string }
+const sessionTouchIntervalMs = 15 * 60 * 1000
 
 declare module 'fastify' {
   interface FastifyRequest { auth?: Session }
@@ -57,12 +58,15 @@ export async function createSession(user: User): Promise<Session> {
 
 export async function getSession(token: string | undefined): Promise<Session | null> {
   if (!token) return null
-  const result = await pool.query<{ user_id: string; username: string; expires_at: Date; csrf_token: string }>(
-    `SELECT users.id AS user_id, users.username, sessions.expires_at, sessions.csrf_token FROM sessions JOIN users ON users.id = sessions.user_id
+  const result = await pool.query<{ user_id: string; username: string; expires_at: Date; csrf_token: string; last_seen_at: Date }>(
+    `SELECT users.id AS user_id, users.username, sessions.expires_at, sessions.csrf_token, sessions.last_seen_at FROM sessions JOIN users ON users.id = sessions.user_id
      WHERE sessions.token_hash = $1 AND sessions.revoked_at IS NULL AND sessions.expires_at > NOW() AND users.is_active = TRUE`, [hashToken(token)],
   )
   const row = result.rows[0]
   if (!row) return null
+  if (Date.now() - row.last_seen_at.getTime() >= sessionTouchIntervalMs) {
+    await pool.query('UPDATE sessions SET last_seen_at = NOW() WHERE token_hash = $1', [hashToken(token)])
+  }
   return { user: { id: row.user_id, username: row.username }, token, expiresAt: row.expires_at, csrfToken: row.csrf_token }
 }
 

@@ -8,7 +8,7 @@ const privateHost = /^(localhost|127\.|0\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[0-
 function validateTarget(url: string): URL {
   const parsed = new URL(url)
   if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password) throw new Error('Only credential-free HTTP URLs are allowed')
-  if (privateHost.test(parsed.hostname) === false && process.env.NODE_ENV !== 'development') throw new Error('Healthcheck host is not allowlisted')
+  if (privateHost.test(parsed.hostname) === false) throw new Error('Healthcheck host is not allowlisted')
   return parsed
 }
 

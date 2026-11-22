@@ -2,6 +2,7 @@ import { createNotificationCenterAdapter, type NotificationCenterAdapter } from 
 import { serviceCatalog } from './adapters/service-catalog.js'
 import type { DashboardNotification, DashboardSnapshot, ServiceSummary } from './types.js'
 import { config } from './config.js'
+import { listServices } from './infrastructure/db/repositories/services.js'
 import { checkServices } from './adapters/service-health.js'
 
 type SnapshotSources = {
@@ -61,17 +62,21 @@ export const createSnapshotService = (sources: SnapshotSources) => ({
     const notifications = notificationsResult.status === 'fulfilled' ? notificationsResult.value : []
     const unreadNotifications = unreadResult.status === 'fulfilled' ? unreadResult.value : notifications.filter((notification) => !notification.read).length
     const notificationsReady = notificationsResult.status === 'fulfilled' || unreadResult.status === 'fulfilled'
-    const healthResults = await checkServices(serviceCatalog.map((service) => ({ id: service.name, url: service.url, timeoutMs: 2500 })))
-    const healthById = new Map(healthResults.map((result) => [result.id, result]))
-    const services = fallbackServices.map((service) => ({ ...service, status: healthById.get(service.name)?.status ?? service.status }))
-    const servicesReady = healthResults.some((result) => result.status !== 'offline')
-
+    let services = fallbackServices
+    let servicesReady: 'ready' | 'offline' | 'not_configured' = 'not_configured'
+    try {
+      const configured = await listServices()
+      const results = await checkServices(configured.filter((service) => service.healthcheckUrl).map((service) => ({ id: service.id, url: service.healthcheckUrl! })))
+      const health = new Map(results.map((result) => [result.id, result]))
+      services = configured.map((service) => ({ name: service.name, description: service.description, url: service.url, host: service.host ?? '', status: health.get(service.id)?.status ?? 'unknown' }))
+      servicesReady = 'ready'
+    } catch { servicesReady = 'offline' }
     return {
       services,
       notifications,
       unreadNotifications,
       generatedAt: new Date().toISOString(),
-      sourceStates: { notifications: notificationsReady ? 'ready' : 'offline', services: servicesReady ? 'ready' : 'stale' },
+      sourceStates: { notifications: notificationsReady ? 'ready' : 'offline', services: servicesReady },
     }
   },
 })

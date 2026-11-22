@@ -3,7 +3,9 @@ export const errorResponseSchema = {
   type: 'object', additionalProperties: false, required: ['error'],
   properties: { error: { type: 'object', additionalProperties: false, required: ['code', 'message', 'requestId'], properties: { code: { type: 'string' }, message: { type: 'string' }, requestId: { type: 'string' } } } },
 } as const
-
 export const dashboardNameBody = { type: 'object', additionalProperties: false, required: ['name'], properties: { name: { type: 'string', minLength: 1, maxLength: 120 } } } as const
 export const widgetBody = { type: 'object', additionalProperties: false, required: ['widgetType'], properties: { widgetType: { type: 'string', minLength: 1, maxLength: 80 }, configuration: { type: 'object', maxProperties: 50 }, layout: { type: 'object', maxProperties: 20 }, isEnabled: { type: 'boolean' } } } as const
 export const bookmarkBody = { type: 'object', additionalProperties: false, required: ['name', 'url'], properties: { name: { type: 'string', minLength: 1, maxLength: 120 }, url: { type: 'string', format: 'uri', maxLength: 2048 }, icon: { type: 'string', maxLength: 120 }, category: { type: 'string', maxLength: 120 }, sortOrder: { type: 'integer', minimum: 0, maximum: 100000 } } } as const
+const serviceProperties = { name: { type: 'string', minLength: 1, maxLength: 120 }, description: { type: 'string', maxLength: 500 }, url: { type: 'string', format: 'uri', maxLength: 2048 }, host: { type: 'string', maxLength: 255 }, healthcheckUrl: { type: 'string', format: 'uri', maxLength: 2048 }, isEnabled: { type: 'boolean' }, sortOrder: { type: 'integer', minimum: 0, maximum: 100000 } } as const
+export const serviceBody = { type: 'object', additionalProperties: false, required: ['name', 'url'], properties: serviceProperties } as const
+export const servicePatchBody = { type: 'object', additionalProperties: false, minProperties: 1, properties: serviceProperties } as const

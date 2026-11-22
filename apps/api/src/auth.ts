@@ -7,7 +7,7 @@ import { config } from './config.js'
 export const SESSION_COOKIE = 'homedash_session'
 const sessionTtlMs = config.sessionTtlDays * 24 * 60 * 60 * 1000
 
-type User = { id: string; username: string }
+type User = { id: string; username: string; isAdmin?: boolean }
 type Session = { user: User; token: string; expiresAt: Date; csrfToken: string }
 const sessionTouchIntervalMs = 15 * 60 * 1000
 
@@ -39,13 +39,13 @@ export async function ensureBootstrapUser(): Promise<void> {
 const dummyPasswordHash = '$argon2id$v=19$m=65536,t=3,p=4$ZHVtbXktc2FsdA$0t1L8xR0a9hYQ3Qj8f2D4w'
 
 export async function authenticate(username: string, password: string): Promise<User | null> {
-  const result = await pool.query<{ id: string; username: string; password_hash: string; is_active: boolean }>(
-    'SELECT id, username, password_hash, is_active FROM users WHERE username = $1', [username],
+  const result = await pool.query<{ id: string; username: string; password_hash: string; is_active: boolean; is_admin: boolean }>(
+    'SELECT id, username, password_hash, is_active, is_admin FROM users WHERE username = $1', [username],
   )
   const user = result.rows[0]
   const validPassword = await verifyPassword(user?.password_hash ?? dummyPasswordHash, password).catch(() => false)
   if (!user || !user.is_active || !validPassword) return null
-  return { id: user.id, username: user.username }
+  return { id: user.id, username: user.username, isAdmin: user.is_admin }
 }
 
 export async function createSession(user: User): Promise<Session> {
@@ -58,8 +58,8 @@ export async function createSession(user: User): Promise<Session> {
 
 export async function getSession(token: string | undefined): Promise<Session | null> {
   if (!token) return null
-  const result = await pool.query<{ user_id: string; username: string; expires_at: Date; csrf_token: string; last_seen_at: Date }>(
-    `SELECT users.id AS user_id, users.username, sessions.expires_at, sessions.csrf_token, sessions.last_seen_at FROM sessions JOIN users ON users.id = sessions.user_id
+  const result = await pool.query<{ user_id: string; username: string; is_admin: boolean; expires_at: Date; csrf_token: string; last_seen_at: Date }>(
+    `SELECT users.id AS user_id, users.username, users.is_admin, sessions.expires_at, sessions.csrf_token, sessions.last_seen_at FROM sessions JOIN users ON users.id = sessions.user_id
      WHERE sessions.token_hash = $1 AND sessions.revoked_at IS NULL AND sessions.expires_at > NOW() AND users.is_active = TRUE`, [hashToken(token)],
   )
   const row = result.rows[0]
@@ -67,7 +67,8 @@ export async function getSession(token: string | undefined): Promise<Session | n
   if (Date.now() - row.last_seen_at.getTime() >= sessionTouchIntervalMs) {
     await pool.query('UPDATE sessions SET last_seen_at = NOW() WHERE token_hash = $1', [hashToken(token)])
   }
-  return { user: { id: row.user_id, username: row.username }, token, expiresAt: row.expires_at, csrfToken: row.csrf_token }
+  return { user: { id: row.user_id, username: row.username, isAdmin: row.is_admin }, token, expiresAt: row.expires_at, csrfToken: row.csrf_token }
+
 }
 
 export function verifyCsrf(request: FastifyRequest, expectedToken: string): boolean {

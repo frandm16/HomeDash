@@ -2,13 +2,16 @@ import Fastify, { type FastifyInstance } from 'fastify'
 import { randomUUID } from 'node:crypto'
 import { heartbeatEvent, replayAfter, subscribeEvents } from './infrastructure/events.js'
 import { isWidgetTypeAllowed, listWidgetDefinitions } from './widgets.js'
-import { bookmarkBody, dashboardNameBody, widgetBody } from './contracts.js'
+import { recordAudit } from './infrastructure/audit.js'
+import { bookmarkBody, dashboardNameBody, serviceBody, servicePatchBody, widgetBody } from './contracts.js'
 import cors from '@fastify/cors'
 import cookie from '@fastify/cookie'
 import rateLimit from '@fastify/rate-limit'
 import { config } from './config.js'
 import { pool } from './db.js'
 import * as dashboardRepository from './infrastructure/db/repositories/dashboard.js'
+import { createService, deleteService, listAllServices, listServices, updateService } from './infrastructure/db/repositories/services.js'
+import { checkServices } from './adapters/service-health.js'
 import { createDevelopmentSources, createSnapshotService } from './snapshot.js'
 import * as authService from './auth.js'
 import { recordAudit as defaultRecordAudit } from './infrastructure/audit.js'
@@ -215,8 +218,25 @@ export async function buildApp(dependencies: AppDependencies = {}): Promise<Fast
     }
   })
   app.get('/api/v1/services', async () => {
-    const snapshot = await snapshotService.getSnapshot()
-    return { services: snapshot.services, sourceState: snapshot.sourceStates?.services }
+    const services = await listServices()
+    const results = await checkServices(services.filter((service) => service.healthcheckUrl).map((service) => ({ id: service.id, url: service.healthcheckUrl! })))
+    const health = new Map(results.map((result) => [result.id, result]))
+    return { services: services.map((service) => ({ ...service, status: health.get(service.id)?.status ?? 'unknown' })), sourceState: 'ready' }
+  })
+  app.post('/api/v1/services', { schema: { body: serviceBody } }, async (request, reply) => {
+    if (!request.auth?.user.isAdmin) return reply.code(403).send({ error: 'Admin access required' })
+    return reply.code(201).send(await createService(request.body as { name: string; url: string; description?: string; host?: string; healthcheckUrl?: string; isEnabled?: boolean; sortOrder?: number }))
+  })
+  app.get('/api/v1/admin/services', async (request, reply) => request.auth?.user.isAdmin ? { services: await listAllServices() } : reply.code(403).send({ error: 'Admin access required' }))
+  app.patch('/api/v1/services/:serviceId', { schema: { body: servicePatchBody } }, async (request, reply) => {
+    if (!request.auth?.user.isAdmin) return reply.code(403).send({ error: 'Admin access required' })
+    const result = await updateService((request.params as { serviceId: string }).serviceId, request.body as Record<string, unknown>)
+    return result ?? reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Service not found', requestId: request.id } })
+  })
+  app.delete('/api/v1/services/:serviceId', async (request, reply) => {
+    if (!request.auth?.user.isAdmin) return reply.code(403).send({ error: 'Admin access required' })
+    if (!await deleteService((request.params as { serviceId: string }).serviceId)) return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Service not found', requestId: request.id } })
+    return { ok: true }
   })
   app.get('/api/v1/notifications', async (_request, reply) => {
     try {

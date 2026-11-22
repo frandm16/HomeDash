@@ -1,5 +1,6 @@
 import { buildApp } from './app.js'
-import { closeDatabase, migrate } from './db.js'
+import { closeDatabase } from './db.js'
+import { migrate } from './infrastructure/db/migrate.js'
 import { config } from './config.js'
 import { ensureBootstrapUser } from './auth.js'
 

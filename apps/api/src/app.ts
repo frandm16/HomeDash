@@ -23,6 +23,17 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(rateLimit, { max: 100, timeWindow: '1 minute' })
   const snapshotService = createSnapshotService(createDevelopmentSources())
 
+  app.setErrorHandler((error, request, reply) => {
+    const fastifyError = error as { validation?: unknown; statusCode?: number }
+    if (fastifyError.validation) {
+      return reply.code(400).send({ error: { code: 'VALIDATION_ERROR', message: 'Request validation failed', requestId: request.id } })
+    }
+    request.log.error(error)
+    return reply.code(fastifyError.statusCode && fastifyError.statusCode >= 400 ? fastifyError.statusCode : 500).send({
+      error: { code: 'INTERNAL_ERROR', message: 'Internal server error', requestId: request.id },
+    })
+  })
+
   app.get('/health', async (_request, reply) => {
     try {
       await pool.query('SELECT 1')
@@ -33,9 +44,22 @@ export async function buildApp(): Promise<FastifyInstance> {
   })
   app.get('/health/live', async () => ({ status: 'ok' }))
 
-  app.post('/api/v1/auth/login', { config: { rateLimit: { max: 5, timeWindow: '1 minute' } } }, async (request, reply) => {
-    const body = request.body as { username?: string; password?: string } | undefined
-    if (!body?.username || !body.password || body.username.length > 120 || body.password.length > 256) {
+  app.post('/api/v1/auth/login', {
+    config: { rateLimit: { max: 5, timeWindow: '1 minute' } },
+    schema: {
+      body: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['username', 'password'],
+        properties: {
+          username: { type: 'string', minLength: 1, maxLength: 120 },
+          password: { type: 'string', minLength: 1, maxLength: 256 },
+        },
+      },
+    },
+  }, async (request, reply) => {
+    const body = request.body as { username: string; password: string }
+    if (!body.username || !body.password) {
       return reply.code(400).send({ error: 'Invalid credentials' })
     }
     const user = await authenticate(body.username, body.password)

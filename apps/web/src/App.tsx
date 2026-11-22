@@ -40,8 +40,97 @@ function BookmarkDialog({ bookmark, profileId, onClose, onSaved }: { bookmark?: 
 }
 
 function WidgetSettings({ widget, onClose, onSave }: { widget: Widget; onClose: () => void; onSave: (configuration: Record<string, unknown>) => void }) {
-  const [provider,setProvider]=useState(String(widget.configuration.provider??'google')); const [newTab,setNewTab]=useState(widget.configuration.openInNewTab!==false)
-  return <div className="overlay" role="presentation" onMouseDown={event=>{if(event.target===event.currentTarget)onClose()}}><section className="dialog"><div className="dialog-heading"><div><p className="kicker">WIDGET SETTINGS</p><h2>Search</h2></div><button className="close-button" onClick={onClose} aria-label="Close"><Icon name="close"/></button></div><label>Provider<select value={provider} onChange={event=>setProvider(event.target.value)}><option value="google">Google</option><option value="duckduckgo">DuckDuckGo</option></select></label><label className="check-label"><input type="checkbox" checked={newTab} onChange={event=>setNewTab(event.target.checked)}/> Open results in a new tab</label><div className="dialog-actions"><button className="button button-quiet" onClick={onClose}>Cancel</button><button className="button button-primary" onClick={()=>onSave({...widget.configuration,provider,openInNewTab:newTab})}>Save settings</button></div></section></div>
+  const [config, setConfig] = useState<Record<string, unknown>>({ ...widget.configuration })
+  const type = widget.widgetType
+
+  return (
+    <div className="overlay" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) onClose() }}>
+      <section className="dialog">
+        <div className="dialog-heading">
+          <div>
+            <p className="kicker">WIDGET CUSTOMIZATION</p>
+            <h2>{type.replace('-', ' ').toUpperCase()}</h2>
+          </div>
+          <button className="close-button" onClick={onClose} aria-label="Close"><Icon name="close"/></button>
+        </div>
+
+        {type === 'search' && (
+          <>
+            <label>Search Provider
+              <select value={String(config.provider ?? 'google')} onChange={e => setConfig(prev => ({ ...prev, provider: e.target.value }))}>
+                <option value="google">Google</option>
+                <option value="duckduckgo">DuckDuckGo</option>
+                <option value="bing">Bing</option>
+                <option value="brave">Brave</option>
+                <option value="github">GitHub</option>
+                <option value="youtube">YouTube</option>
+              </select>
+            </label>
+            <label>Visual Style
+              <select value={String(config.searchStyle ?? 'pill')} onChange={e => setConfig(prev => ({ ...prev, searchStyle: e.target.value }))}>
+                <option value="pill">Pill (Floating Glass)</option>
+                <option value="minimal">Minimal (Clean Border)</option>
+                <option value="compact">Compact (Dense)</option>
+                <option value="floating-glow">Neon Glow</option>
+              </select>
+            </label>
+            <label className="check-label">
+              <input type="checkbox" checked={config.showEngineIcon !== false} onChange={e => setConfig(prev => ({ ...prev, showEngineIcon: e.target.checked }))}/>
+              Show search engine logo
+            </label>
+            <label className="check-label">
+              <input type="checkbox" checked={config.openInNewTab !== false} onChange={e => setConfig(prev => ({ ...prev, openInNewTab: e.target.checked }))}/>
+              Open results in a new tab
+            </label>
+          </>
+        )}
+
+        {type === 'bookmarks' && (
+          <>
+            <label>Display Style
+              <select value={String(config.bookmarkStyle ?? 'tiles')} onChange={e => setConfig(prev => ({ ...prev, bookmarkStyle: e.target.value }))}>
+                <option value="icons-only">Icons Only (No Text / App Launchpad)</option>
+                <option value="tiles">Cards / Tiles with Host</option>
+                <option value="compact-chips">Compact Chips</option>
+                <option value="dock">Dock (macOS Glass Dock)</option>
+              </select>
+            </label>
+            <label>Icon Scale
+              <select value={String(config.iconSize ?? 'normal')} onChange={e => setConfig(prev => ({ ...prev, iconSize: e.target.value }))}>
+                <option value="normal">Normal</option>
+                <option value="large">Large</option>
+              </select>
+            </label>
+          </>
+        )}
+
+        {type === 'notifications' && (
+          <>
+            <label>Notification Style
+              <select value={String(config.notificationStyle ?? 'cards')} onChange={e => setConfig(prev => ({ ...prev, notificationStyle: e.target.value }))}>
+                <option value="cards">Glass Cards List</option>
+                <option value="timeline">Vertical Timeline</option>
+                <option value="compact-ticker">Compact Ticker (1-row)</option>
+                <option value="badge-only">Status Badge Counter</option>
+              </select>
+            </label>
+            <label>Max items displayed
+              <select value={Number(config.maxItems ?? 6)} onChange={e => setConfig(prev => ({ ...prev, maxItems: Number(e.target.value) }))}>
+                <option value={3}>3 notifications</option>
+                <option value={6}>6 notifications</option>
+                <option value={10}>10 notifications</option>
+              </select>
+            </label>
+          </>
+        )}
+
+        <div className="dialog-actions">
+          <button className="button button-quiet" onClick={onClose}>Cancel</button>
+          <button className="button button-primary" onClick={() => onSave(config)}>Save style</button>
+        </div>
+      </section>
+    </div>
+  )
 }
 
 function WidgetRenderer({definition,props}:{definition:(typeof widgetRegistry)[string];props:WidgetRenderProps}){const Widget=definition.render;return <Widget {...props}/>}
@@ -66,7 +155,7 @@ function Dashboard({ user, onLogout }: { user: AuthUser; onLogout: () => void })
   const onDragMove=(event:PointerEvent)=>{const drag=dragRef.current;if(!drag||drag.pointerId!==event.pointerId)return;const cell=getCell(event.clientX,event.clientY);if(cell){const widget=widgets.find(item=>item.id===drag.id);if(!widget)return;const columns=window.innerWidth<=420?2:window.innerWidth<=720?4:GRID_COLUMNS,grid=gridRef.current,rect=grid?.getBoundingClientRect(),cellWidth=rect?rect.width/columns:1,cellHeight=parseFloat(getComputedStyle(grid!).gridTemplateRows.split(' ')[0])||72,min=widgetRegistry[widget.widgetType]?.minSize??{width:1,height:1};if(drag.mode==='move')setDropCell({...drag.origin,x:Math.max(0,Math.min(columns-drag.origin.width,cell.x)),y:cell.y});else{const dx=Math.round((event.clientX-drag.startX)/cellWidth),dy=Math.round((event.clientY-drag.startY)/cellHeight),edge=drag.edge??'se';let{x,y,width,height}=drag.origin;if(edge.includes('e'))width=Math.max(min.width,Math.min(columns-x,width+dx));if(edge.includes('s'))height=Math.max(min.height,height+dy);if(edge.includes('w')){const nextWidth=Math.max(min.width,Math.min(width-dx,drag.origin.x+drag.origin.width));x=drag.origin.x+drag.origin.width-nextWidth;width=nextWidth}if(edge.includes('n')){const nextHeight=Math.max(min.height,drag.origin.height-dy);y=drag.origin.y+drag.origin.height-nextHeight;height=nextHeight}setDropCell({x,y,width,height})}if(Math.abs(event.clientX-drag.startX)+Math.abs(event.clientY-drag.startY)>5)drag.moved=true}}
   const onDragEnd=(event:PointerEvent)=>{const drag=dragRef.current;if(!drag||drag.pointerId!==event.pointerId)return;dragRef.current=null;setDraggingId(null);setDropCell(null);if(!drag.moved)return;const widget=widgets.find(item=>item.id===drag.id);if(!widget)return;const target=drag.mode==='resize'?dropCell:((cell)=>cell?{...drag.origin,x:Math.min((window.innerWidth<=420?2:window.innerWidth<=720?4:GRID_COLUMNS)-drag.origin.width,cell.x),y:cell.y}:null)(getCell(event.clientX,event.clientY));if(!target)return;const definition=widgetRegistry[widget.widgetType],result=moveWidget(widgets,widget.id,target,definition?.minSize??{width:1,height:1});saveWidgets(result)}
   return <main className="app-frame"><div className="corner-menu" ref={menuRef}><button className="gear-button" aria-label="Open dashboard menu" aria-haspopup="menu" aria-expanded={menuOpen} onClick={()=>setMenuOpen(value=>!value)}><Icon name="gear" size={19}/></button>{menuOpen&&<div className="gear-dropdown" role="menu"><div className="menu-user">{user.username}</div><button role="menuitem" onClick={()=>{setEditing(value=>!value);setMenuOpen(false)}}><Icon name={editing?'check':'edit'} size={15}/>{editing?'Done editing':'Edit dashboard'}</button><button role="menuitem" onClick={()=>{setMenuOpen(false);onLogout()}}><Icon name="logout" size={15}/>Log out</button></div>}</div>
-    {!enabledWidgets.length?<section className="widget-grid empty-dashboard" aria-label="Dashboard widgets"><p>Your canvas is empty.</p><button className="button button-primary" onClick={()=>{setEditing(true);setShowCatalog(true)}}>Add widget</button></section>:<section ref={gridRef} className={`widget-grid ${editing?'editing':''}`} aria-label="Dashboard widgets">{enabledWidgets.map(widget=>{const definition=widgetRegistry[widget.widgetType];const props={data,state:connection==='offline'?'offline' as const:connection==='stale'?'stale' as const:snapshot?'ready' as const:'loading' as const,message:snapshot?.sourceStates?.notifications,editing,configuration:widget.configuration,onBookmarkChange:()=>setBookmarkDialog({}),onBookmarkDelete:removeBookmark,onBookmarkEdit:(bookmark:Bookmark)=>setBookmarkDialog({bookmark})};return <article key={widget.id} className={`widget-shell ${editing?'is-editing':''} ${draggingId===widget.id?'is-dragging':''}`} style={{gridColumn:`${widget.layout.x+1}/span ${widget.layout.width}`,gridRow:`${widget.layout.y+1}/span ${widget.layout.height}`}}>{editing&&<div className="widget-toolbar"><button className="drag-handle" aria-label={`Move ${definition?.type??'widget'}`} title="Drag to move" onPointerDown={event=>onDragStart(event,widget)} onPointerMove={onDragMove} onPointerUp={onDragEnd} onPointerCancel={onDragEnd}><Icon name="move" size={13}/></button><strong>{definition?.type.replaceAll('-',' ')}</strong><div className="widget-toolbar-actions">{widget.widgetType==='search'&&<button onClick={()=>setSettingsWidget(widget)} aria-label="Widget settings" title="Settings"><Icon name="settings" size={14}/></button>}<button className="remove-widget" onClick={()=>void removeWidget(widget)} aria-label="Remove widget" title="Remove"><Icon name="remove" size={13}/></button></div></div>}{definition&&<WidgetRenderer definition={definition} props={props}/ >}{editing&&['n','s','e','w','ne','nw','se','sw'].map(edge=><span key={edge} className={`resize-handle resize-${edge}`} role="separator" aria-label={`Resize ${definition?.type??'widget'} ${edge}`} onPointerDown={event=>onDragStart(event,widget,'resize',edge)} onPointerMove={onDragMove} onPointerUp={onDragEnd} onPointerCancel={onDragEnd}/>)}</article>})}{dropCell&&draggingId&&<div className="drop-indicator" style={{gridColumn:`${dropCell.x+1}/span ${dropCell.width}`,gridRow:`${dropCell.y+1}/span ${dropCell.height}`}}/>}</section>}
+    {!enabledWidgets.length?<section className="widget-grid empty-dashboard" aria-label="Dashboard widgets"><p>Your canvas is empty.</p><button className="button button-primary" onClick={()=>{setEditing(true);setShowCatalog(true)}}>Add widget</button></section>:<section ref={gridRef} className={`widget-grid ${editing?'editing':''}`} aria-label="Dashboard widgets">{enabledWidgets.map(widget=>{const definition=widgetRegistry[widget.widgetType];const props={data,state:connection==='offline'?'offline' as const:connection==='stale'?'stale' as const:snapshot?'ready' as const:'loading' as const,message:snapshot?.sourceStates?.notifications,editing,configuration:widget.configuration,onConfigurationChange:(configuration:Record<string,unknown>)=>updateConfiguration(widget,configuration),onBookmarkChange:()=>setBookmarkDialog({}),onBookmarkDelete:removeBookmark,onBookmarkEdit:(bookmark:Bookmark)=>setBookmarkDialog({bookmark})};return <article key={widget.id} className={`widget-shell ${editing?'is-editing':''} ${draggingId===widget.id?'is-dragging':''}`} style={{gridColumn:`${widget.layout.x+1}/span ${widget.layout.width}`,gridRow:`${widget.layout.y+1}/span ${widget.layout.height}`}}>{editing&&<div className="widget-toolbar"><button className="drag-handle" aria-label={`Move ${definition?.type??'widget'}`} title="Drag to move" onPointerDown={event=>onDragStart(event,widget)} onPointerMove={onDragMove} onPointerUp={onDragEnd} onPointerCancel={onDragEnd}><Icon name="move" size={13}/></button><strong>{definition?.type.replaceAll('-',' ')}</strong><div className="widget-toolbar-actions">{['search','bookmarks','notifications'].includes(widget.widgetType)&&<button onClick={()=>setSettingsWidget(widget)} aria-label="Widget settings" title="Settings"><Icon name="settings" size={14}/></button>}<button className="remove-widget" onClick={()=>void removeWidget(widget)} aria-label="Remove widget" title="Remove"><Icon name="remove" size={13}/></button></div></div>}{definition&&<WidgetRenderer definition={definition} props={props}/ >}{editing&&['n','s','e','w','ne','nw','se','sw'].map(edge=><span key={edge} className={`resize-handle resize-${edge}`} role="separator" aria-label={`Resize ${definition?.type??'widget'} ${edge}`} onPointerDown={event=>onDragStart(event,widget,'resize',edge)} onPointerMove={onDragMove} onPointerUp={onDragEnd} onPointerCancel={onDragEnd}/>)}</article>})}{dropCell&&draggingId&&<div className="drop-indicator" style={{gridColumn:`${dropCell.x+1}/span ${dropCell.width}`,gridRow:`${dropCell.y+1}/span ${dropCell.height}`}}/>}</section>}
     {showCatalog&&<WidgetCatalog definitions={definitions} widgets={widgets} onClose={()=>setShowCatalog(false)} onAdd={addWidget}/>} {bookmarkDialog&&profile&&<BookmarkDialog profileId={profile.id} bookmark={bookmarkDialog.bookmark} onClose={()=>setBookmarkDialog(null)} onSaved={bookmarkSaved}/>} {settingsWidget&&<WidgetSettings widget={settingsWidget} onClose={()=>setSettingsWidget(null)} onSave={configuration=>updateConfiguration(settingsWidget,configuration)}/>}
   </main>
 }

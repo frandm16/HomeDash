@@ -6,7 +6,7 @@ import cookie from '@fastify/cookie'
 import rateLimit from '@fastify/rate-limit'
 import { config } from './config.js'
 import { pool } from './db.js'
-import { createBookmark, createWidget, deleteWidget, listBookmarks, listProfiles, listWidgets } from './infrastructure/db/repositories/dashboard.js'
+import { createBookmark, createDashboard, createWidget, deleteBookmark, deleteDashboard, deleteWidget, listBookmarks, listDashboards, listProfiles, listWidgets, updateBookmark, updateDashboard, updateProfile, updateWidget } from './infrastructure/db/repositories/dashboard.js'
 import { createDevelopmentSources, createSnapshotService } from './snapshot.js'
 import { authenticate, clearSessionCookie, createSession, getSession, requireAuth, revokeAllSessions, revokeSession, SESSION_COOKIE, setSessionCookie, verifyCsrf } from './auth.js'
 
@@ -111,7 +111,13 @@ export async function buildApp(): Promise<FastifyInstance> {
     }
   })
 
+  app.get('/api/v1/dashboards', async (request) => ({ dashboards: await listDashboards(request.auth!.user.id) }))
+  app.post('/api/v1/dashboards', { schema: { body: { type: 'object', additionalProperties: false, required: ['name'], properties: { name: { type: 'string', minLength: 1, maxLength: 120 } } } } }, async (request, reply) => reply.code(201).send(await createDashboard(request.auth!.user.id, request.body as { name: string })))
+  app.patch('/api/v1/dashboards/:dashboardId', { schema: { body: { type: 'object', additionalProperties: false, required: ['name'], properties: { name: { type: 'string', minLength: 1, maxLength: 120 } } } } }, async (request, reply) => { const result = await updateDashboard(request.auth!.user.id, (request.params as { dashboardId: string }).dashboardId, request.body as { name: string }); return result ?? reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Dashboard not found', requestId: request.id } }) })
+  app.delete('/api/v1/dashboards/:dashboardId', async (request, reply) => { if (!await deleteDashboard(request.auth!.user.id, (request.params as { dashboardId: string }).dashboardId)) return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Dashboard not found or cannot be deleted', requestId: request.id } }); return { ok: true } })
   app.get('/api/v1/profiles', async (request) => ({ profiles: await listProfiles(request.auth!.user.id) }))
+  app.get('/api/v1/dashboards/:dashboardId/profiles', async (request) => ({ profiles: await listProfiles(request.auth!.user.id, (request.params as { dashboardId: string }).dashboardId) }))
+  app.patch('/api/v1/profiles/:profileId', async (request, reply) => { const result = await updateProfile(request.auth!.user.id, (request.params as { profileId: string }).profileId, request.body as { layoutVersion?: number }); return result ?? reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Profile not found', requestId: request.id } }) })
   app.get('/api/v1/profiles/:profileId/widgets', async (request) => {
     const params = request.params as { profileId: string }
     return { widgets: await listWidgets(request.auth!.user.id, params.profileId) }
@@ -123,6 +129,7 @@ export async function buildApp(): Promise<FastifyInstance> {
     const body = request.body as { widgetType: string; configuration?: unknown; layout?: unknown }
     return reply.code(201).send(await createWidget(request.auth!.user.id, params.profileId, body))
   })
+  app.patch('/api/v1/widgets/:widgetId', async (request, reply) => { const result = await updateWidget(request.auth!.user.id, (request.params as { widgetId: string }).widgetId, request.body as { configuration?: unknown; layout?: unknown; isEnabled?: boolean }, request.headers['if-unmodified-since']); return result ?? reply.code(409).send({ error: { code: 'CONFLICT', message: 'Widget was modified or not found', requestId: request.id } }) })
   app.delete('/api/v1/widgets/:widgetId', async (request, reply) => {
     const params = request.params as { widgetId: string }
     if (!await deleteWidget(request.auth!.user.id, params.widgetId)) return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Widget not found', requestId: request.id } })
@@ -137,9 +144,11 @@ export async function buildApp(): Promise<FastifyInstance> {
   }, async (request, reply) => {
     const params = request.params as { profileId: string }
     const body = request.body as { name: string; url: string; icon?: string; category?: string }
-    if (!['http:', 'https:'].includes(new URL(body.url).protocol)) return reply.code(400).send({ error: { code: 'INVALID_URL', message: 'Only HTTP and HTTPS URLs are allowed', requestId: request.id } })
+    if (!['http:', 'https:'].includes(new URL(body.url).protocol) || new URL(body.url).username || new URL(body.url).password) return reply.code(400).send({ error: { code: 'INVALID_URL', message: 'Only public HTTP and HTTPS URLs are allowed', requestId: request.id } })
     return reply.code(201).send(await createBookmark(request.auth!.user.id, params.profileId, body))
   })
+  app.patch('/api/v1/bookmarks/:bookmarkId', async (request, reply) => { const result = await updateBookmark(request.auth!.user.id, (request.params as { bookmarkId: string }).bookmarkId, request.body as { name?: string; url?: string; icon?: string; category?: string; sortOrder?: number }); return result ?? reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Bookmark not found', requestId: request.id } }) })
+  app.delete('/api/v1/bookmarks/:bookmarkId', async (request, reply) => { if (!await deleteBookmark(request.auth!.user.id, (request.params as { bookmarkId: string }).bookmarkId)) return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Bookmark not found', requestId: request.id } }); return { ok: true } })
 
   app.get('/api/v1/events', async (request, reply) => {
     if (!request.auth) return reply.code(401).send({ error: 'Authentication required' })

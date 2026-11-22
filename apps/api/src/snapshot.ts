@@ -1,39 +1,14 @@
+import { createNotificationCenterAdapter, type NotificationCenterAdapter } from './adapters/notification-center.js'
+import { serviceCatalog } from './adapters/service-catalog.js'
 import type { DashboardNotification, DashboardSnapshot, ServiceSummary } from './types.js'
 
-const services: ServiceSummary[] = [
-  {
-    name: 'Notification Center',
-    description: 'Central notification inbox',
-    url: 'https://notifications.frandm.dev',
-    status: 'online',
-    host: '192.168.1.52:7778',
-  },
-  {
-    name: 'Proxmox',
-    description: 'Virtualization node management',
-    url: 'https://proxmox.frandm.dev',
-    status: 'online',
-    host: '192.168.1.50:8006',
-  },
-  {
-    name: 'Dokploy',
-    description: 'Application deployment platform',
-    url: 'https://dokploy.frandm.dev',
-    status: 'degraded',
-    host: '192.168.1.52:3000',
-  },
-  {
-    name: 'Pi-hole',
-    description: 'Network-wide DNS filtering',
-    url: 'https://pihole.frandm.dev',
-    status: 'online',
-    host: '192.168.1.51:8080',
-  },
-]
+type SnapshotSources = {
+  notifications: NotificationCenterAdapter
+}
 
-const notifications: DashboardNotification[] = [
+const fallbackNotifications: DashboardNotification[] = [
   {
-    id: 'prototype-1',
+    id: 'fallback-1',
     source: 'Proxmox',
     title: 'Backup completed successfully',
     body: 'VM 200 · dokploy-vm',
@@ -42,7 +17,7 @@ const notifications: DashboardNotification[] = [
     createdAt: '2026-11-22T08:30:00.000Z',
   },
   {
-    id: 'prototype-2',
+    id: 'fallback-2',
     source: 'System',
     title: 'Disk usage is above 80%',
     body: 'dokploy-vm · /var/lib/docker',
@@ -51,7 +26,7 @@ const notifications: DashboardNotification[] = [
     createdAt: '2026-11-22T08:08:00.000Z',
   },
   {
-    id: 'prototype-3',
+    id: 'fallback-3',
     source: 'StudyZen',
     title: 'Exam reminder',
     body: 'Artificial Intelligence · tomorrow',
@@ -61,9 +36,49 @@ const notifications: DashboardNotification[] = [
   },
 ]
 
-export const getSnapshot = (): DashboardSnapshot => ({
-  services,
-  notifications,
-  unreadNotifications: notifications.filter((notification) => !notification.read).length,
-  generatedAt: new Date().toISOString(),
+const fallbackServices: ServiceSummary[] = serviceCatalog.map((service) => ({
+  ...service,
+  status: service.name === 'Notification Center' ? 'offline' : 'unknown',
+}))
+
+const createFallbackAdapter = (): NotificationCenterAdapter => ({
+  async getNotifications() {
+    return fallbackNotifications
+  },
+  async getUnreadCount() {
+    return fallbackNotifications.filter((notification) => !notification.read).length
+  },
 })
+
+export const createSnapshotService = (sources: SnapshotSources) => ({
+  async getSnapshot(): Promise<DashboardSnapshot> {
+    const [notifications, unreadNotifications] = await Promise.all([
+      sources.notifications.getNotifications(),
+      sources.notifications.getUnreadCount(),
+    ])
+
+    return {
+      services: fallbackServices,
+      notifications,
+      unreadNotifications,
+      generatedAt: new Date().toISOString(),
+    }
+  },
+})
+
+export const createDevelopmentSources = (): SnapshotSources => {
+  const baseUrl = process.env.NOTIFICATION_CENTER_URL
+  const readToken = process.env.NOTIFICATION_CENTER_READ_TOKEN
+
+  if (!baseUrl) {
+    return { notifications: createFallbackAdapter() }
+  }
+
+  return {
+    notifications: createNotificationCenterAdapter({
+      baseUrl,
+      readToken,
+      timeoutMs: Number(process.env.NOTIFICATION_CENTER_TIMEOUT_MS ?? 5000),
+    }),
+  }
+}

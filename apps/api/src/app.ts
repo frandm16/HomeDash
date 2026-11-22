@@ -1,5 +1,6 @@
 import Fastify, { type FastifyInstance } from 'fastify'
 import { randomUUID } from 'node:crypto'
+import { heartbeatEvent, subscribeEvents } from './infrastructure/events.js'
 import cors from '@fastify/cors'
 import cookie from '@fastify/cookie'
 import rateLimit from '@fastify/rate-limit'
@@ -138,6 +139,18 @@ export async function buildApp(): Promise<FastifyInstance> {
     const body = request.body as { name: string; url: string; icon?: string; category?: string }
     if (!['http:', 'https:'].includes(new URL(body.url).protocol)) return reply.code(400).send({ error: { code: 'INVALID_URL', message: 'Only HTTP and HTTPS URLs are allowed', requestId: request.id } })
     return reply.code(201).send(await createBookmark(request.auth!.user.id, params.profileId, body))
+  })
+
+  app.get('/api/v1/events', async (request, reply) => {
+    if (!request.auth) return reply.code(401).send({ error: 'Authentication required' })
+    reply.hijack()
+    const response = reply.raw
+    response.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive', 'X-Accel-Buffering': 'no' })
+    const send = (event: ReturnType<typeof heartbeatEvent>) => response.write(`id: ${event.id}\\nevent: ${event.type}\\ndata: ${JSON.stringify(event)}\\n\\n`)
+    send(heartbeatEvent())
+    const unsubscribe = subscribeEvents(send)
+    const heartbeat = setInterval(() => send(heartbeatEvent()), 25_000)
+    request.raw.on('close', () => { clearInterval(heartbeat); unsubscribe() })
   })
 
   app.get('/api/v1/dashboard', async (_request, reply) => {

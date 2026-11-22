@@ -1,6 +1,7 @@
 import Fastify, { type FastifyInstance } from 'fastify'
 import { randomUUID } from 'node:crypto'
 import { heartbeatEvent, subscribeEvents } from './infrastructure/events.js'
+import { isWidgetTypeAllowed, listWidgetDefinitions } from './widgets.js'
 import cors from '@fastify/cors'
 import cookie from '@fastify/cookie'
 import rateLimit from '@fastify/rate-limit'
@@ -111,6 +112,7 @@ export async function buildApp(): Promise<FastifyInstance> {
     }
   })
 
+  app.get('/api/v1/widgets/definitions', async () => ({ widgets: listWidgetDefinitions() }))
   app.get('/api/v1/dashboards', async (request) => ({ dashboards: await listDashboards(request.auth!.user.id) }))
   app.post('/api/v1/dashboards', { schema: { body: { type: 'object', additionalProperties: false, required: ['name'], properties: { name: { type: 'string', minLength: 1, maxLength: 120 } } } } }, async (request, reply) => reply.code(201).send(await createDashboard(request.auth!.user.id, request.body as { name: string })))
   app.patch('/api/v1/dashboards/:dashboardId', { schema: { body: { type: 'object', additionalProperties: false, required: ['name'], properties: { name: { type: 'string', minLength: 1, maxLength: 120 } } } } }, async (request, reply) => { const result = await updateDashboard(request.auth!.user.id, (request.params as { dashboardId: string }).dashboardId, request.body as { name: string }); return result ?? reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Dashboard not found', requestId: request.id } }) })
@@ -127,6 +129,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   }, async (request, reply) => {
     const params = request.params as { profileId: string }
     const body = request.body as { widgetType: string; configuration?: unknown; layout?: unknown }
+    if (!isWidgetTypeAllowed(body.widgetType)) return reply.code(400).send({ error: { code: 'INVALID_WIDGET_TYPE', message: 'Unknown widget type', requestId: request.id } })
     return reply.code(201).send(await createWidget(request.auth!.user.id, params.profileId, body))
   })
   app.patch('/api/v1/widgets/:widgetId', async (request, reply) => { const result = await updateWidget(request.auth!.user.id, (request.params as { widgetId: string }).widgetId, request.body as { configuration?: unknown; layout?: unknown; isEnabled?: boolean }, request.headers['if-unmodified-since']); return result ?? reply.code(409).send({ error: { code: 'CONFLICT', message: 'Widget was modified or not found', requestId: request.id } }) })

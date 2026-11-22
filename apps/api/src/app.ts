@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto'
 import { heartbeatEvent, subscribeEvents } from './infrastructure/events.js'
 import { isWidgetTypeAllowed, listWidgetDefinitions } from './widgets.js'
 import { recordAudit } from './infrastructure/audit.js'
+import { bookmarkBody, dashboardNameBody, widgetBody } from './contracts.js'
 import cors from '@fastify/cors'
 import cookie from '@fastify/cookie'
 import rateLimit from '@fastify/rate-limit'
@@ -117,8 +118,8 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   app.get('/api/v1/widgets/definitions', async () => ({ widgets: listWidgetDefinitions() }))
   app.get('/api/v1/dashboards', async (request) => ({ dashboards: await listDashboards(request.auth!.user.id) }))
-  app.post('/api/v1/dashboards', { schema: { body: { type: 'object', additionalProperties: false, required: ['name'], properties: { name: { type: 'string', minLength: 1, maxLength: 120 } } } } }, async (request, reply) => reply.code(201).send(await createDashboard(request.auth!.user.id, request.body as { name: string })))
-  app.patch('/api/v1/dashboards/:dashboardId', { schema: { body: { type: 'object', additionalProperties: false, required: ['name'], properties: { name: { type: 'string', minLength: 1, maxLength: 120 } } } } }, async (request, reply) => { const result = await updateDashboard(request.auth!.user.id, (request.params as { dashboardId: string }).dashboardId, request.body as { name: string }); return result ?? reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Dashboard not found', requestId: request.id } }) })
+  app.post('/api/v1/dashboards', { schema: { body: dashboardNameBody } }, async (request, reply) => reply.code(201).send(await createDashboard(request.auth!.user.id, request.body as { name: string })))
+  app.patch('/api/v1/dashboards/:dashboardId', { schema: { body: dashboardNameBody } }, async (request, reply) => { const result = await updateDashboard(request.auth!.user.id, (request.params as { dashboardId: string }).dashboardId, request.body as { name: string }); return result ?? reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Dashboard not found', requestId: request.id } }) })
   app.delete('/api/v1/dashboards/:dashboardId', async (request, reply) => { if (!await deleteDashboard(request.auth!.user.id, (request.params as { dashboardId: string }).dashboardId)) return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Dashboard not found or cannot be deleted', requestId: request.id } }); return { ok: true } })
   app.get('/api/v1/profiles', async (request) => ({ profiles: await listProfiles(request.auth!.user.id) }))
   app.get('/api/v1/dashboards/:dashboardId/profiles', async (request) => ({ profiles: await listProfiles(request.auth!.user.id, (request.params as { dashboardId: string }).dashboardId) }))
@@ -128,7 +129,7 @@ export async function buildApp(): Promise<FastifyInstance> {
     return { widgets: await listWidgets(request.auth!.user.id, params.profileId) }
   })
   app.post('/api/v1/profiles/:profileId/widgets', {
-    schema: { body: { type: 'object', additionalProperties: false, required: ['widgetType'], properties: { widgetType: { type: 'string', minLength: 1, maxLength: 80 }, configuration: {}, layout: {} } } },
+    schema: { body: widgetBody },
   }, async (request, reply) => {
     const params = request.params as { profileId: string }
     const body = request.body as { widgetType: string; configuration?: unknown; layout?: unknown }
@@ -146,7 +147,7 @@ export async function buildApp(): Promise<FastifyInstance> {
     return { bookmarks: await listBookmarks(request.auth!.user.id, params.profileId) }
   })
   app.post('/api/v1/profiles/:profileId/bookmarks', {
-    schema: { body: { type: 'object', additionalProperties: false, required: ['name', 'url'], properties: { name: { type: 'string', minLength: 1, maxLength: 120 }, url: { type: 'string', format: 'uri', maxLength: 2048 }, icon: { type: 'string', maxLength: 120 }, category: { type: 'string', maxLength: 120 } } } },
+    schema: { body: bookmarkBody },
   }, async (request, reply) => {
     const params = request.params as { profileId: string }
     const body = request.body as { name: string; url: string; icon?: string; category?: string }

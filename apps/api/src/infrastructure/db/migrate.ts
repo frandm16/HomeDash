@@ -3,7 +3,8 @@ import { pool } from '../../db.js'
 import { name as initialName, up as initialUp, version as initialVersion } from './migrations/001_initial.js'
 
 type Migration = { version: number; name: string; up: string }
-const migrations: Migration[] = [{ version: initialVersion, name: initialName, up: initialUp }]
+const migrations: Migration[] = [{ version: initialVersion, name: initialName, up: initialUp }].sort((left, right) => left.version - right.version)
+if (new Set(migrations.map((migration) => migration.version)).size !== migrations.length) throw new Error('Duplicate migration version')
 
 async function ensureLedger(client: PoolClient): Promise<void> {
   await client.query(`
@@ -20,8 +21,11 @@ export async function migrate(): Promise<void> {
   try {
     await client.query('SELECT pg_advisory_lock($1)', [98172341])
     await ensureLedger(client)
-    const applied = await client.query<{ version: number }>('SELECT version FROM schema_migrations')
+    const applied = await client.query<{ version: number; name: string }>('SELECT version, name FROM schema_migrations ORDER BY version')
     const appliedVersions = new Set(applied.rows.map((row) => row.version))
+    const knownVersions = new Set(migrations.map((migration) => migration.version))
+    const unknown = applied.rows.find((row) => !knownVersions.has(row.version))
+    if (unknown) throw new Error(`Unknown database migration version: ${unknown.version}`)
 
     for (const migration of migrations) {
       if (appliedVersions.has(migration.version)) continue

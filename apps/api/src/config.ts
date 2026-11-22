@@ -14,6 +14,8 @@ const nodeEnv = process.env.NODE_ENV ?? 'development'
 const isProduction = nodeEnv === 'production'
 const databaseUrl = process.env.DATABASE_URL ?? (isProduction ? '' : 'postgres://homedash:change-me@localhost:5432/homedash')
 const corsOrigin = process.env.CORS_ORIGIN ?? (isProduction ? '' : 'http://localhost:5173')
+const allowedEnvironments = new Set(['development', 'test', 'production'])
+if (!allowedEnvironments.has(nodeEnv)) throw new Error('NODE_ENV must be development, test, or production')
 
 if (!databaseUrl) throw new Error('DATABASE_URL is required in production')
 if (!corsOrigin) throw new Error('CORS_ORIGIN is required in production')

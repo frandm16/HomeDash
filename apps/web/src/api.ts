@@ -7,6 +7,7 @@ export type PerformanceSnapshot = { metrics: PerformanceMetric[]; generatedAt: s
 export type DashboardSnapshot = { services: Service[]; notifications: DashboardNotification[]; unreadNotifications: number; generatedAt: string; sourceStates?: Record<string, SourceState> }
 export type GridLayout = { x: number; y: number; width: number; height: number }
 export type Widget = { id: string; widgetType: string; widgetVersion: number; configuration: Record<string, unknown>; layout: GridLayout; isEnabled: boolean; updatedAt?: string }
+export type WidgetDefinition = { type: string; version: number; defaultConfiguration: Record<string, unknown>; minSize: { w: number; h: number }; initialSize: { w: number; h: number }; permissions: string[]; refreshIntervalMs?: number }
 export type DashboardProfile = { id: string; dashboardId?: string; profileKey: 'desktop' | 'wall' | 'mobile'; layoutVersion: number }
 export type Bookmark = { id: string; name: string; url: string; icon?: string; category?: string; sortOrder: number }
 export type AuthUser = { id: string; username: string }
@@ -26,8 +27,11 @@ export function logout(): Promise<{ ok: boolean }> { return request<{ ok: boolea
 export function fetchDashboard(signal?: AbortSignal): Promise<DashboardSnapshot> { return request('/v1/dashboard', { signal }) }
 export function fetchPerformance(signal?: AbortSignal): Promise<PerformanceSnapshot> { return request('/v1/performance', { signal }) }
 export function fetchProfiles(): Promise<{ profiles: DashboardProfile[] }> { return request('/v1/profiles') }
+export function fetchWidgetDefinitions(): Promise<{ widgets: WidgetDefinition[] }> { return request('/v1/widgets/definitions') }
 export function fetchWidgets(profileId: string): Promise<{ widgets: Widget[] }> { return request(`/v1/profiles/${profileId}/widgets`) }
-export function updateWidget(id: string, layout: GridLayout, updatedAt?: string): Promise<Widget> { return request(`/v1/widgets/${id}`, { method: 'PATCH', headers: updatedAt ? { 'If-Unmodified-Since': updatedAt } : undefined, body: JSON.stringify({ layout }) }) }
+export function createWidget(profileId: string, widgetType: string, configuration: Record<string, unknown>, layout: GridLayout): Promise<Widget> { return request(`/v1/profiles/${profileId}/widgets`, { method: 'POST', body: JSON.stringify({ widgetType, configuration, layout, isEnabled: true }) }) }
+export function deleteWidget(id: string): Promise<{ ok: boolean }> { return request(`/v1/widgets/${id}`, { method: 'DELETE' }) }
+export function updateWidget(id: string, patch: { layout?: GridLayout; configuration?: Record<string, unknown>; isEnabled?: boolean }, updatedAt?: string): Promise<Widget> { return request(`/v1/widgets/${id}`, { method: 'PATCH', headers: updatedAt ? { 'If-Unmodified-Since': updatedAt } : undefined, body: JSON.stringify(patch) }) }
 export function fetchBookmarks(profileId: string): Promise<{ bookmarks: Bookmark[] }> { return request(`/v1/profiles/${profileId}/bookmarks`) }
 export function createBookmark(profileId: string, input: Omit<Bookmark, 'id' | 'sortOrder'>): Promise<Bookmark> { return request(`/v1/profiles/${profileId}/bookmarks`, { method: 'POST', body: JSON.stringify(input) }) }
 export function updateBookmark(id: string, input: Partial<Omit<Bookmark, 'id'>>): Promise<Bookmark> { return request(`/v1/bookmarks/${id}`, { method: 'PATCH', body: JSON.stringify(input) }) }

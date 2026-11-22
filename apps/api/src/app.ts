@@ -2,7 +2,7 @@ import Fastify, { type FastifyInstance } from 'fastify'
 import { randomUUID } from 'node:crypto'
 import { heartbeatEvent, replayAfter, subscribeEvents } from './infrastructure/events.js'
 import { isWidgetTypeAllowed, listWidgetDefinitions } from './widgets.js'
-import { bookmarkBody, bookmarkPatchBody, dashboardNameBody, serviceBody, servicePatchBody, widgetBody } from './contracts.js'
+import { bookmarkBody, bookmarkPatchBody, dashboardNameBody, serviceBody, servicePatchBody, widgetBody, widgetPatchBody } from './contracts.js'
 import cors from '@fastify/cors'
 import cookie from '@fastify/cookie'
 import rateLimit from '@fastify/rate-limit'
@@ -172,7 +172,7 @@ export async function buildApp(dependencies: AppDependencies = {}): Promise<Fast
     if (widget) await recordAudit({ userId: request.auth!.user.id, action: 'create', resourceType: 'widget', resourceId: widget.id })
     return reply.code(201).send(widget)
   })
-  app.patch('/api/v1/widgets/:widgetId', async (request, reply) => { const id = (request.params as { widgetId: string }).widgetId; const result = await dashboard.updateWidget(request.auth!.user.id, id, request.body as { configuration?: unknown; layout?: unknown; isEnabled?: boolean }, request.headers['if-unmodified-since']); if (!result) return reply.code(409).send({ error: { code: 'CONFLICT', message: 'Widget was modified or not found', requestId: request.id } }); await recordAudit({ userId: request.auth!.user.id, action: 'update', resourceType: 'widget', resourceId: id }); return result })
+  app.patch('/api/v1/widgets/:widgetId', { schema: { body: widgetPatchBody } }, async (request, reply) => { const id = (request.params as { widgetId: string }).widgetId; const result = await dashboard.updateWidget(request.auth!.user.id, id, request.body as { configuration?: unknown; layout?: unknown; isEnabled?: boolean }, request.headers['if-unmodified-since']); if (!result) return reply.code(409).send({ error: { code: 'CONFLICT', message: 'Widget was modified or not found', requestId: request.id } }); await recordAudit({ userId: request.auth!.user.id, action: 'update', resourceType: 'widget', resourceId: id }); return result })
   app.delete('/api/v1/widgets/:widgetId', async (request, reply) => {
     const params = request.params as { widgetId: string }
     if (!await dashboard.deleteWidget(request.auth!.user.id, params.widgetId)) return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Widget not found', requestId: request.id } })

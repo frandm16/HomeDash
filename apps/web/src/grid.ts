@@ -14,3 +14,9 @@ export function moveWidget(widgets: Widget[], id: string, layout: GridLayout, mi
   while (occupied.some((widget) => overlaps(candidate, widget.layout))) candidate = { ...candidate, y: candidate.y + 1 }
   return widgets.map((widget) => widget.id === id ? { ...widget, layout: candidate } : widget)
 }
+export function placeWidget(widgets: Widget[], widget: Widget, minSize: { width: number; height: number }): Widget[] {
+  const candidate = normalizeLayout(widget.layout, minSize)
+  let next = candidate
+  while (widgets.some((item) => item.isEnabled && overlaps(next, item.layout))) next = { ...next, y: next.y + 1 }
+  return [...widgets, { ...widget, layout: next, isEnabled: true }]
+}

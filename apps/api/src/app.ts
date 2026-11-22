@@ -26,6 +26,14 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(cookie)
   await app.register(cors, { origin: config.corsOrigin, credentials: true })
   await app.register(rateLimit, { max: 100, timeWindow: '1 minute' })
+  app.addHook('onSend', async (request, reply) => {
+    reply.header('X-Content-Type-Options', 'nosniff')
+    reply.header('Referrer-Policy', 'strict-origin-when-cross-origin')
+    reply.header('X-Frame-Options', 'DENY')
+    reply.header('Permissions-Policy', 'camera=(), microphone=(), geolocation=()')
+    reply.header('Content-Security-Policy', "default-src 'none'; frame-ancestors 'none'; base-uri 'none'")
+    if (config.isProduction) reply.header('Strict-Transport-Security', 'max-age=31536000; includeSubDomains')
+  })
   const snapshotService = createSnapshotService(createDevelopmentSources())
 
   app.setErrorHandler((error, request, reply) => {

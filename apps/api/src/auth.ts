@@ -76,6 +76,15 @@ export async function revokeSession(token: string | undefined): Promise<void> {
   if (token) await pool.query('UPDATE sessions SET revoked_at = NOW() WHERE token_hash = $1 AND revoked_at IS NULL', [hashToken(token)])
 }
 
+export async function revokeAllSessions(userId: string): Promise<void> {
+  await pool.query('UPDATE sessions SET revoked_at = NOW() WHERE user_id = $1 AND revoked_at IS NULL', [userId])
+}
+
+export async function touchSession(session: Session): Promise<void> {
+  if (Date.now() - session.expiresAt.getTime() < sessionTtlMs - 60 * 60 * 1000) return
+  await pool.query('UPDATE sessions SET last_seen_at = NOW() WHERE token_hash = $1 AND revoked_at IS NULL', [hashToken(session.token)])
+}
+
 export function setSessionCookie(reply: FastifyReply, session: Session): void {
   reply.setCookie(SESSION_COOKIE, session.token, {
     httpOnly: true,
@@ -90,11 +99,12 @@ export function clearSessionCookie(reply: FastifyReply): void {
   reply.clearCookie(SESSION_COOKIE, { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/' })
 }
 
-export async function requireAuth(request: FastifyRequest, reply: FastifyReply): Promise<void> {
+export async function requireAuth(request: FastifyRequest, reply: FastifyReply): Promise<Session | null> {
   const session = await getSession(request.cookies[SESSION_COOKIE])
   if (!session) {
     await reply.code(401).send({ error: 'Authentication required' })
-    return
+    return null
   }
   request.auth = session
+  return session
 }

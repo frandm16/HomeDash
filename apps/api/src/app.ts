@@ -6,7 +6,7 @@ import rateLimit from '@fastify/rate-limit'
 import { config } from './config.js'
 import { pool } from './db.js'
 import { createDevelopmentSources, createSnapshotService } from './snapshot.js'
-import { authenticate, clearSessionCookie, createSession, getSession, requireAuth, revokeSession, SESSION_COOKIE, setSessionCookie, verifyCsrf } from './auth.js'
+import { authenticate, clearSessionCookie, createSession, getSession, requireAuth, revokeAllSessions, revokeSession, SESSION_COOKIE, setSessionCookie, verifyCsrf } from './auth.js'
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -59,9 +59,21 @@ export async function buildApp(): Promise<FastifyInstance> {
     return { ok: true }
   })
 
+  app.post('/api/v1/auth/logout-all', async (request, reply) => {
+    const session = await getSession(request.cookies[SESSION_COOKIE])
+    if (!session) return reply.code(401).send({ error: 'Authentication required' })
+    if (!verifyCsrf(request, session.csrfToken)) return reply.code(403).send({ error: 'CSRF validation failed' })
+    await revokeAllSessions(session.user.id)
+    clearSessionCookie(reply)
+    return { ok: true }
+  })
+
   app.addHook('preHandler', async (request, reply) => {
-    if (request.url === '/health' || request.url.startsWith('/api/v1/auth/')) return
-    await requireAuth(request, reply)
+    if (request.url === '/health' || request.url === '/health/live' || request.url.startsWith('/api/v1/auth/')) return
+    const session = await requireAuth(request, reply)
+    if (session && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(request.method) && !verifyCsrf(request, session.csrfToken)) {
+      return reply.code(403).send({ error: 'CSRF validation failed' })
+    }
   })
 
   app.get('/api/v1/dashboard', async (_request, reply) => {

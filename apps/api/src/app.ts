@@ -1,6 +1,6 @@
 import Fastify, { type FastifyInstance } from 'fastify'
 import { randomUUID } from 'node:crypto'
-import { heartbeatEvent, subscribeEvents } from './infrastructure/events.js'
+import { heartbeatEvent, replayAfter, subscribeEvents } from './infrastructure/events.js'
 import { isWidgetTypeAllowed, listWidgetDefinitions } from './widgets.js'
 import { recordAudit } from './infrastructure/audit.js'
 import { bookmarkBody, dashboardNameBody, widgetBody } from './contracts.js'
@@ -163,6 +163,8 @@ export async function buildApp(): Promise<FastifyInstance> {
     const response = reply.raw
     response.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive', 'X-Accel-Buffering': 'no' })
     const send = (event: ReturnType<typeof heartbeatEvent>) => response.write(`id: ${event.id}\\nevent: ${event.type}\\ndata: ${JSON.stringify(event)}\\n\\n`)
+    const lastEventId = request.headers['last-event-id']
+    for (const event of replayAfter(typeof lastEventId === 'string' ? lastEventId : undefined)) send(event)
     send(heartbeatEvent())
     const unsubscribe = subscribeEvents(send)
     const heartbeat = setInterval(() => send(heartbeatEvent()), 25_000)

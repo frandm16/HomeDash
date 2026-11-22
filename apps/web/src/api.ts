@@ -32,4 +32,10 @@ export function fetchProfiles(): Promise<{ profiles: DashboardProfile[] }> { ret
 export function fetchWidgets(profileId: string): Promise<{ widgets: Widget[] }> { return request(`/v1/profiles/${profileId}/widgets`) }
 export function fetchBookmarks(profileId: string): Promise<{ bookmarks: Bookmark[] }> { return request(`/v1/profiles/${profileId}/bookmarks`) }
 export function createBookmark(profileId: string, input: Omit<Bookmark, 'id' | 'sortOrder'>): Promise<Bookmark> { return request(`/v1/profiles/${profileId}/bookmarks`, { method: 'POST', body: JSON.stringify(input) }) }
-export function openEvents(onEvent: (event: MessageEvent) => void): EventSource { const source = new EventSource(`${apiBaseUrl}/v1/events`, { withCredentials: true }); source.onmessage = onEvent; return source }
+export function openEvents(onEvent: (event: MessageEvent) => void, onState?: (state: 'connected' | 'reconnecting' | 'offline') => void): EventSource {
+  const source = new EventSource(`${apiBaseUrl}/v1/events`, { withCredentials: true })
+  source.onopen = () => onState?.('connected')
+  source.onmessage = onEvent
+  source.onerror = () => onState?.(source.readyState === EventSource.CLOSED ? 'offline' : 'reconnecting')
+  return source
+}

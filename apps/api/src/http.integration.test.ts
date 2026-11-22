@@ -4,10 +4,10 @@ import type { AppDependencies } from './app.js'
 import { buildApp } from './app.js'
 import { SESSION_COOKIE } from './auth.js'
 
-type Session = { user: { id: string; username: string }; token: string; expiresAt: Date; csrfToken: string }
+type Session = { user: { id: string; username: string; isAdmin?: boolean }; token: string; expiresAt: Date; lastSeenAt: Date; csrfToken: string; csrfTokenHash: string }
 
-const user = { id: '11111111-1111-4111-8111-111111111111', username: 'alice' }
-const session: Session = { user, token: 'session-token', expiresAt: new Date('2030-01-01T00:00:00.000Z'), csrfToken: 'csrf-token' }
+const user = { id: '11111111-1111-4111-8111-111111111111', username: 'alice', isAdmin: true }
+const session: Session = { user, token: 'session-token', expiresAt: new Date('2030-01-01T00:00:00.000Z'), lastSeenAt: new Date('2030-01-01T00:00:00.000Z'), csrfToken: 'a'.repeat(64), csrfTokenHash: 'ffe054fe7ae0cb6dc65c3af9b61d5209f439851db43d0ba5997337df154668eb' }
 
 function dependencies(overrides: Partial<AppDependencies> = {}): AppDependencies {
   const auth = {
@@ -59,7 +59,7 @@ test('login returns CSRF token and secure session cookie', async () => {
     const response = await app.inject({ method: 'POST', url: '/api/v1/auth/login', payload: { username: 'alice', password: 'secret' } })
     assert.equal(response.statusCode, 200)
     assert.equal(response.json().csrfToken, session.csrfToken)
-    assert.match(response.headers['set-cookie'] as string, new RegExp(`${SESSION_COOKIE}=${session.token}`))
+    assert.match((response.headers['set-cookie'] as string[]).join('; '), new RegExp(`${SESSION_COOKIE}=${session.token}`))
   })
 })
 

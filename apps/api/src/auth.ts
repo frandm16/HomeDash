@@ -1,5 +1,5 @@
 import argon2 from 'argon2'
-import { createHash, randomBytes } from 'node:crypto'
+import { createHash, randomBytes, timingSafeEqual } from 'node:crypto'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import { pool } from './db.js'
 
@@ -7,7 +7,7 @@ export const SESSION_COOKIE = 'homedash_session'
 const sessionTtlMs = Number(process.env.SESSION_TTL_DAYS ?? 30) * 24 * 60 * 60 * 1000
 
 type User = { id: string; username: string }
-type Session = { user: User; token: string; expiresAt: Date }
+type Session = { user: User; token: string; expiresAt: Date; csrfToken: string }
 
 declare module 'fastify' {
   interface FastifyRequest { auth?: Session }
@@ -48,20 +48,27 @@ export async function authenticate(username: string, password: string): Promise<
 
 export async function createSession(user: User): Promise<Session> {
   const token = randomBytes(32).toString('hex')
+  const csrfToken = randomBytes(32).toString('hex')
   const expiresAt = new Date(Date.now() + sessionTtlMs)
-  await pool.query('INSERT INTO sessions (token_hash, user_id, expires_at) VALUES ($1, $2, $3)', [hashToken(token), user.id, expiresAt])
-  return { user, token, expiresAt }
+  await pool.query('INSERT INTO sessions (token_hash, user_id, expires_at, csrf_token) VALUES ($1, $2, $3, $4)', [hashToken(token), user.id, expiresAt, csrfToken])
+  return { user, token, expiresAt, csrfToken }
 }
 
 export async function getSession(token: string | undefined): Promise<Session | null> {
   if (!token) return null
-  const result = await pool.query<{ user_id: string; username: string; expires_at: Date }>(
-    `SELECT users.id AS user_id, users.username, sessions.expires_at FROM sessions JOIN users ON users.id = sessions.user_id
+  const result = await pool.query<{ user_id: string; username: string; expires_at: Date; csrf_token: string }>(
+    `SELECT users.id AS user_id, users.username, sessions.expires_at, sessions.csrf_token FROM sessions JOIN users ON users.id = sessions.user_id
      WHERE sessions.token_hash = $1 AND sessions.revoked_at IS NULL AND sessions.expires_at > NOW() AND users.is_active = TRUE`, [hashToken(token)],
   )
   const row = result.rows[0]
   if (!row) return null
-  return { user: { id: row.user_id, username: row.username }, token, expiresAt: row.expires_at }
+  return { user: { id: row.user_id, username: row.username }, token, expiresAt: row.expires_at, csrfToken: row.csrf_token }
+}
+
+export function verifyCsrf(request: FastifyRequest, expectedToken: string): boolean {
+  const provided = request.headers['x-csrf-token']
+  if (typeof provided !== 'string' || provided.length !== expectedToken.length) return false
+  return timingSafeEqual(Buffer.from(provided), Buffer.from(expectedToken))
 }
 
 export async function revokeSession(token: string | undefined): Promise<void> {

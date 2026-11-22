@@ -22,8 +22,12 @@ export async function migrate(): Promise<void> {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       expires_at TIMESTAMPTZ NOT NULL,
-      revoked_at TIMESTAMPTZ
+      revoked_at TIMESTAMPTZ,
+      csrf_token TEXT NOT NULL
     );
+    ALTER TABLE sessions ADD COLUMN IF NOT EXISTS csrf_token TEXT;
+    UPDATE sessions SET csrf_token = encode(gen_random_bytes(32), 'hex') WHERE csrf_token IS NULL;
+    ALTER TABLE sessions ALTER COLUMN csrf_token SET NOT NULL;
     CREATE INDEX IF NOT EXISTS sessions_user_id_idx ON sessions(user_id);
     CREATE INDEX IF NOT EXISTS sessions_expires_at_idx ON sessions(expires_at);
   `)

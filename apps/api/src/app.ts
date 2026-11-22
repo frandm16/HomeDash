@@ -2,7 +2,7 @@ import Fastify, { type FastifyInstance } from 'fastify'
 import { randomUUID } from 'node:crypto'
 import { heartbeatEvent, replayAfter, subscribeEvents } from './infrastructure/events.js'
 import { isWidgetTypeAllowed, listWidgetDefinitions } from './widgets.js'
-import { bookmarkBody, dashboardNameBody, serviceBody, servicePatchBody, widgetBody } from './contracts.js'
+import { bookmarkBody, bookmarkPatchBody, dashboardNameBody, serviceBody, servicePatchBody, widgetBody } from './contracts.js'
 import cors from '@fastify/cors'
 import cookie from '@fastify/cookie'
 import rateLimit from '@fastify/rate-limit'
@@ -78,7 +78,7 @@ export async function buildApp(dependencies: AppDependencies = {}): Promise<Fast
   app.get('/health/ready', async (_request, reply) => {
     try {
       const result = await pool.query<{ applied: boolean }>(`SELECT EXISTS (
-        SELECT 1 FROM schema_migrations WHERE version = 1
+        SELECT 1 FROM schema_migrations WHERE version = 3
       ) AS applied`)
       if (!result.rows[0]?.applied) return reply.code(503).send({ status: 'not_ready', checks: { database: 'ready', migrations: 'pending' } })
       return { status: 'ready', checks: { database: 'ready', migrations: 'ready' } }
@@ -193,7 +193,7 @@ export async function buildApp(dependencies: AppDependencies = {}): Promise<Fast
     if (bookmark) await recordAudit({ userId: request.auth!.user.id, action: 'create', resourceType: 'bookmark', resourceId: bookmark.id })
     return reply.code(201).send(bookmark)
   })
-  app.patch('/api/v1/bookmarks/:bookmarkId', async (request, reply) => { const id = (request.params as { bookmarkId: string }).bookmarkId; const result = await dashboard.updateBookmark(request.auth!.user.id, id, request.body as { name?: string; url?: string; icon?: string; category?: string; sortOrder?: number }); if (!result) return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Bookmark not found', requestId: request.id } }); await recordAudit({ userId: request.auth!.user.id, action: 'update', resourceType: 'bookmark', resourceId: id }); return result })
+  app.patch('/api/v1/bookmarks/:bookmarkId', { schema: { body: bookmarkPatchBody } }, async (request, reply) => { const id = (request.params as { bookmarkId: string }).bookmarkId; const patch = request.body as { name?: string; url?: string; icon?: string; category?: string; sortOrder?: number }; if (patch.url) { const parsed = new URL(patch.url); if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password) return reply.code(400).send({ error: { code: 'INVALID_URL', message: 'Only public HTTP and HTTPS URLs are allowed', requestId: request.id } }) } const result = await dashboard.updateBookmark(request.auth!.user.id, id, patch); if (!result) return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Bookmark not found', requestId: request.id } }); await recordAudit({ userId: request.auth!.user.id, action: 'update', resourceType: 'bookmark', resourceId: id }); return result })
   app.delete('/api/v1/bookmarks/:bookmarkId', async (request, reply) => { const id = (request.params as { bookmarkId: string }).bookmarkId; if (!await dashboard.deleteBookmark(request.auth!.user.id, id)) return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Bookmark not found', requestId: request.id } }); await recordAudit({ userId: request.auth!.user.id, action: 'delete', resourceType: 'bookmark', resourceId: id }); return { ok: true } })
 
   app.get('/api/v1/events', async (request, reply) => {
@@ -217,6 +217,15 @@ export async function buildApp(dependencies: AppDependencies = {}): Promise<Fast
       return reply.code(502).send({ error: 'Dashboard sources unavailable' })
     }
   })
+  app.get('/api/v1/performance', async () => ({
+    metrics: [
+      { key: 'cpu', label: 'CPU', value: null, unit: '%', state: 'not_configured' },
+      { key: 'gpu', label: 'GPU', value: null, unit: '%', state: 'not_configured' },
+      { key: 'ram', label: 'RAM', value: null, unit: '%', state: 'not_configured' },
+    ],
+    generatedAt: new Date().toISOString(),
+    sourceState: 'not_configured',
+  }))
   app.get('/api/v1/services', async () => {
     const services = await listServices()
     const results = await checkServices(services.filter((service) => service.healthcheckUrl).map((service) => ({ id: service.id, url: service.healthcheckUrl! })))

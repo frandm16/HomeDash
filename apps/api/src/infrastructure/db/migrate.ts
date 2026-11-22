@@ -2,11 +2,13 @@ import type { PoolClient } from 'pg'
 import { pool } from '../../db.js'
 import { name as initialName, up as initialUp, version as initialVersion } from './migrations/001_initial.js'
 import { name as serviceCatalogName, up as serviceCatalogUp, version as serviceCatalogVersion } from './migrations/002_service_catalog_admin.js'
+import { name as mvpBookmarksName, up as mvpBookmarksUp, version as mvpBookmarksVersion } from './migrations/003_mvp_bookmarks.js'
 
 type Migration = { version: number; name: string; up: string }
 const migrations: Migration[] = [
   { version: initialVersion, name: initialName, up: initialUp },
   { version: serviceCatalogVersion, name: serviceCatalogName, up: serviceCatalogUp },
+  { version: mvpBookmarksVersion, name: mvpBookmarksName, up: mvpBookmarksUp },
 ].sort((left, right) => left.version - right.version)
 if (new Set(migrations.map((migration) => migration.version)).size !== migrations.length) throw new Error('Duplicate migration version')
 

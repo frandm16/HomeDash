@@ -5,6 +5,7 @@ import cookie from '@fastify/cookie'
 import rateLimit from '@fastify/rate-limit'
 import { config } from './config.js'
 import { pool } from './db.js'
+import { createBookmark, createWidget, deleteWidget, listBookmarks, listProfiles, listWidgets } from './infrastructure/db/repositories/dashboard.js'
 import { createDevelopmentSources, createSnapshotService } from './snapshot.js'
 import { authenticate, clearSessionCookie, createSession, getSession, requireAuth, revokeAllSessions, revokeSession, SESSION_COOKIE, setSessionCookie, verifyCsrf } from './auth.js'
 
@@ -98,6 +99,36 @@ export async function buildApp(): Promise<FastifyInstance> {
     if (session && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(request.method) && !verifyCsrf(request, session.csrfToken)) {
       return reply.code(403).send({ error: 'CSRF validation failed' })
     }
+  })
+
+  app.get('/api/v1/profiles', async (request) => ({ profiles: await listProfiles(request.auth!.user.id) }))
+  app.get('/api/v1/profiles/:profileId/widgets', async (request) => {
+    const params = request.params as { profileId: string }
+    return { widgets: await listWidgets(request.auth!.user.id, params.profileId) }
+  })
+  app.post('/api/v1/profiles/:profileId/widgets', {
+    schema: { body: { type: 'object', additionalProperties: false, required: ['widgetType'], properties: { widgetType: { type: 'string', minLength: 1, maxLength: 80 }, configuration: {}, layout: {} } } },
+  }, async (request, reply) => {
+    const params = request.params as { profileId: string }
+    const body = request.body as { widgetType: string; configuration?: unknown; layout?: unknown }
+    return reply.code(201).send(await createWidget(request.auth!.user.id, params.profileId, body))
+  })
+  app.delete('/api/v1/widgets/:widgetId', async (request, reply) => {
+    const params = request.params as { widgetId: string }
+    if (!await deleteWidget(request.auth!.user.id, params.widgetId)) return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Widget not found', requestId: request.id } })
+    return { ok: true }
+  })
+  app.get('/api/v1/profiles/:profileId/bookmarks', async (request) => {
+    const params = request.params as { profileId: string }
+    return { bookmarks: await listBookmarks(request.auth!.user.id, params.profileId) }
+  })
+  app.post('/api/v1/profiles/:profileId/bookmarks', {
+    schema: { body: { type: 'object', additionalProperties: false, required: ['name', 'url'], properties: { name: { type: 'string', minLength: 1, maxLength: 120 }, url: { type: 'string', format: 'uri', maxLength: 2048 }, icon: { type: 'string', maxLength: 120 }, category: { type: 'string', maxLength: 120 } } } },
+  }, async (request, reply) => {
+    const params = request.params as { profileId: string }
+    const body = request.body as { name: string; url: string; icon?: string; category?: string }
+    if (!['http:', 'https:'].includes(new URL(body.url).protocol)) return reply.code(400).send({ error: { code: 'INVALID_URL', message: 'Only HTTP and HTTPS URLs are allowed', requestId: request.id } })
+    return reply.code(201).send(await createBookmark(request.auth!.user.id, params.profileId, body))
   })
 
   app.get('/api/v1/dashboard', async (_request, reply) => {

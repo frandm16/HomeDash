@@ -2,6 +2,7 @@ import { createNotificationCenterAdapter, type NotificationCenterAdapter } from 
 import { serviceCatalog } from './adapters/service-catalog.js'
 import type { DashboardNotification, DashboardSnapshot, ServiceSummary } from './types.js'
 import { config } from './config.js'
+import { checkServices } from './adapters/service-health.js'
 
 type SnapshotSources = {
   notifications: NotificationCenterAdapter
@@ -60,13 +61,17 @@ export const createSnapshotService = (sources: SnapshotSources) => ({
     const notifications = notificationsResult.status === 'fulfilled' ? notificationsResult.value : []
     const unreadNotifications = unreadResult.status === 'fulfilled' ? unreadResult.value : notifications.filter((notification) => !notification.read).length
     const notificationsReady = notificationsResult.status === 'fulfilled' || unreadResult.status === 'fulfilled'
+    const healthResults = await checkServices(serviceCatalog.map((service) => ({ id: service.name, url: service.url, timeoutMs: 2500 })))
+    const healthById = new Map(healthResults.map((result) => [result.id, result]))
+    const services = fallbackServices.map((service) => ({ ...service, status: healthById.get(service.name)?.status ?? service.status }))
+    const servicesReady = healthResults.some((result) => result.status !== 'offline')
 
     return {
-      services: fallbackServices,
+      services,
       notifications,
       unreadNotifications,
       generatedAt: new Date().toISOString(),
-      sourceStates: { notifications: notificationsReady ? 'ready' : 'offline', services: 'not_configured' },
+      sourceStates: { notifications: notificationsReady ? 'ready' : 'offline', services: servicesReady ? 'ready' : 'stale' },
     }
   },
 })

@@ -70,10 +70,8 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
     volumes:
       - homedash-postgres-data:/var/lib/postgresql/data
-    security_opt:
-      - no-new-privileges:true
-    cap_drop:
-      - ALL
+    # PostgreSQL's official entrypoint must retain the permissions needed to
+    # prepare /var/lib/postgresql/data and switch to the postgres user.
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s

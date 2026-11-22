@@ -1,0 +1,14 @@
+{
+  "name": "homedash",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "dev:web": "npm --prefix apps/web run dev",
+    "build:web": "npm --prefix apps/web run build",
+    "lint:web": "npm --prefix apps/web run lint",
+    "dev:api": "npm --prefix apps/api run dev",
+    "build:api": "npm --prefix apps/api run build",
+    "lint:api": "npm --prefix apps/api run lint",
+    "test:api": "npm --prefix apps/api run test"
+  }
+}

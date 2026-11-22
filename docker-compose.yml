@@ -13,6 +13,8 @@ services:
       BOOTSTRAP_PASSWORD: ${BOOTSTRAP_PASSWORD:-}
       NOTIFICATION_CENTER_URL: ${NOTIFICATION_CENTER_URL:-}
       NOTIFICATION_CENTER_READ_TOKEN: ${NOTIFICATION_CENTER_READ_TOKEN:-}
+      NOTIFICATION_CENTER_TIMEOUT_MS: ${NOTIFICATION_CENTER_TIMEOUT_MS:-5000}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/health/ready || exit 1"]
       interval: 10s
@@ -66,8 +68,6 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-homedash}
       POSTGRES_USER: ${POSTGRES_USER:-homedash}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
-    ports:
-      - "127.0.0.1:5432:5432"
     volumes:
       - homedash-postgres-data:/var/lib/postgresql/data
     security_opt:

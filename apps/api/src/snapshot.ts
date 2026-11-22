@@ -53,16 +53,20 @@ const createFallbackAdapter = (): NotificationCenterAdapter => ({
 
 export const createSnapshotService = (sources: SnapshotSources) => ({
   async getSnapshot(): Promise<DashboardSnapshot> {
-    const [notifications, unreadNotifications] = await Promise.all([
+    const [notificationsResult, unreadResult] = await Promise.allSettled([
       sources.notifications.getNotifications(),
       sources.notifications.getUnreadCount(),
     ])
+    const notifications = notificationsResult.status === 'fulfilled' ? notificationsResult.value : []
+    const unreadNotifications = unreadResult.status === 'fulfilled' ? unreadResult.value : notifications.filter((notification) => !notification.read).length
+    const notificationsReady = notificationsResult.status === 'fulfilled' || unreadResult.status === 'fulfilled'
 
     return {
       services: fallbackServices,
       notifications,
       unreadNotifications,
       generatedAt: new Date().toISOString(),
+      sourceStates: { notifications: notificationsReady ? 'ready' : 'offline', services: 'not_configured' },
     }
   },
 })

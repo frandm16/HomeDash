@@ -21,9 +21,12 @@ export type DashboardNotification = {
   createdAt: string
 }
 
+export type SourceState = 'ready' | 'offline' | 'stale' | 'not_configured'
+
 export type DashboardSnapshot = {
   services: ServiceSummary[]
   notifications: DashboardNotification[]
   unreadNotifications: number
   generatedAt: string
+  sourceStates?: Record<string, SourceState>
 }

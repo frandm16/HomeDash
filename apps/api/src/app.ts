@@ -137,7 +137,10 @@ export async function buildApp(): Promise<FastifyInstance> {
       return reply.code(502).send({ error: 'Dashboard sources unavailable' })
     }
   })
-  app.get('/api/v1/services', async () => ({ services: (await snapshotService.getSnapshot()).services }))
+  app.get('/api/v1/services', async () => {
+    const snapshot = await snapshotService.getSnapshot()
+    return { services: snapshot.services, sourceState: snapshot.sourceStates?.services }
+  })
   app.get('/api/v1/notifications', async (_request, reply) => {
     try {
       const snapshot = await snapshotService.getSnapshot()

@@ -2,6 +2,7 @@ import Fastify, { type FastifyInstance } from 'fastify'
 import { randomUUID } from 'node:crypto'
 import { heartbeatEvent, subscribeEvents } from './infrastructure/events.js'
 import { isWidgetTypeAllowed, listWidgetDefinitions } from './widgets.js'
+import { recordAudit } from './infrastructure/audit.js'
 import cors from '@fastify/cors'
 import cookie from '@fastify/cookie'
 import rateLimit from '@fastify/rate-limit'
@@ -76,6 +77,7 @@ export async function buildApp(): Promise<FastifyInstance> {
     }
     const user = await authenticate(body.username, body.password)
     if (!user) return reply.code(401).send({ error: 'Invalid credentials' })
+    await recordAudit({ userId: user.id, action: 'login', resourceType: 'session' })
     const session = await createSession(user)
     setSessionCookie(reply, session)
     return { user, csrfToken: session.csrfToken }
@@ -91,6 +93,7 @@ export async function buildApp(): Promise<FastifyInstance> {
     const session = await getSession(request.cookies[SESSION_COOKIE])
     if (session && !verifyCsrf(request, session.csrfToken)) return reply.code(403).send({ error: 'CSRF validation failed' })
     await revokeSession(request.cookies[SESSION_COOKIE])
+    if (session) await recordAudit({ userId: session.user.id, action: 'logout', resourceType: 'session' })
     clearSessionCookie(reply)
     return { ok: true }
   })

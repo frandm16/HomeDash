@@ -121,12 +121,12 @@ export async function buildApp(dependencies: AppDependencies = {}): Promise<Fast
   app.get('/api/v1/auth/session', async (request, reply) => {
     const session = await auth.getSession(request.cookies[SESSION_COOKIE])
     if (!session) return reply.code(401).send({ error: 'Authentication required' })
-    return { user: session.user, expiresAt: session.expiresAt.toISOString(), csrfToken: session.csrfToken }
+    return { user: session.user, expiresAt: session.expiresAt.toISOString(), csrfToken: request.cookies.homedash_csrf ?? session.csrfToken }
   })
 
   app.post('/api/v1/auth/logout', async (request, reply) => {
     const session = await auth.getSession(request.cookies[SESSION_COOKIE])
-    if (session && !verifyCsrf(request, session.csrfToken)) return reply.code(403).send({ error: 'CSRF validation failed' })
+    if (session && !verifyCsrf(request, session)) return reply.code(403).send({ error: 'CSRF validation failed' })
     await auth.revokeSession(request.cookies[SESSION_COOKIE])
     if (session) await recordAudit({ userId: session.user.id, action: 'logout', resourceType: 'session' })
     clearSessionCookie(reply)
@@ -136,7 +136,7 @@ export async function buildApp(dependencies: AppDependencies = {}): Promise<Fast
   app.post('/api/v1/auth/logout-all', async (request, reply) => {
     const session = await auth.getSession(request.cookies[SESSION_COOKIE])
     if (!session) return reply.code(401).send({ error: 'Authentication required' })
-    if (!verifyCsrf(request, session.csrfToken)) return reply.code(403).send({ error: 'CSRF validation failed' })
+    if (!verifyCsrf(request, session)) return reply.code(403).send({ error: 'CSRF validation failed' })
     await auth.revokeAllSessions(session.user.id)
     clearSessionCookie(reply)
     return { ok: true }
@@ -145,7 +145,8 @@ export async function buildApp(dependencies: AppDependencies = {}): Promise<Fast
   app.addHook('preHandler', async (request, reply) => {
     if (request.url === '/health' || request.url === '/health/live' || request.url === '/health/ready' || request.url === '/metrics' || request.url.startsWith('/api/v1/auth/')) return
     const session = await auth.requireAuth(request, reply)
-    if (session && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(request.method) && !verifyCsrf(request, session.csrfToken)) {
+    if (session) await authService.touchSession(session)
+    if (session && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(request.method) && !verifyCsrf(request, session)) {
       return reply.code(403).send({ error: 'CSRF validation failed' })
     }
   })

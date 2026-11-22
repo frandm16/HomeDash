@@ -5,10 +5,11 @@ import { pool } from './db.js'
 import { config } from './config.js'
 
 export const SESSION_COOKIE = 'homedash_session'
+export const CSRF_COOKIE = 'homedash_csrf'
 const sessionTtlMs = config.sessionTtlDays * 24 * 60 * 60 * 1000
 
 type User = { id: string; username: string; isAdmin?: boolean }
-type Session = { user: User; token: string; expiresAt: Date; csrfToken: string }
+type Session = { user: User; token: string; expiresAt: Date; lastSeenAt: Date; csrfToken: string; csrfTokenHash: string }
 const sessionTouchIntervalMs = 15 * 60 * 1000
 
 declare module 'fastify' {
@@ -16,6 +17,7 @@ declare module 'fastify' {
 }
 
 const hashToken = (token: string) => createHash('sha256').update(token).digest('hex')
+const hashCsrfToken = (token: string) => createHash('sha256').update(token).digest('hex')
 
 export async function hashPassword(password: string): Promise<string> {
   return argon2.hash(password, { type: argon2.argon2id })
@@ -52,14 +54,14 @@ export async function createSession(user: User): Promise<Session> {
   const token = randomBytes(32).toString('hex')
   const csrfToken = randomBytes(32).toString('hex')
   const expiresAt = new Date(Date.now() + sessionTtlMs)
-  await pool.query('INSERT INTO sessions (token_hash, user_id, expires_at, csrf_token) VALUES ($1, $2, $3, $4)', [hashToken(token), user.id, expiresAt, csrfToken])
-  return { user, token, expiresAt, csrfToken }
+  await pool.query('INSERT INTO sessions (token_hash, user_id, expires_at, csrf_token_hash) VALUES ($1, $2, $3, $4)', [hashToken(token), user.id, expiresAt, hashCsrfToken(csrfToken)])
+  return { user, token, expiresAt, lastSeenAt: new Date(), csrfToken, csrfTokenHash: hashCsrfToken(csrfToken) }
 }
 
 export async function getSession(token: string | undefined): Promise<Session | null> {
   if (!token) return null
-  const result = await pool.query<{ user_id: string; username: string; is_admin: boolean; expires_at: Date; csrf_token: string; last_seen_at: Date }>(
-    `SELECT users.id AS user_id, users.username, users.is_admin, sessions.expires_at, sessions.csrf_token, sessions.last_seen_at FROM sessions JOIN users ON users.id = sessions.user_id
+  const result = await pool.query<{ user_id: string; username: string; is_admin: boolean; expires_at: Date; last_seen_at: Date; csrf_token_hash: string }>(
+    `SELECT users.id AS user_id, users.username, users.is_admin, sessions.expires_at, sessions.last_seen_at, sessions.csrf_token_hash FROM sessions JOIN users ON users.id = sessions.user_id
      WHERE sessions.token_hash = $1 AND sessions.revoked_at IS NULL AND sessions.expires_at > NOW() AND users.is_active = TRUE`, [hashToken(token)],
   )
   const row = result.rows[0]
@@ -67,14 +69,15 @@ export async function getSession(token: string | undefined): Promise<Session | n
   if (Date.now() - row.last_seen_at.getTime() >= sessionTouchIntervalMs) {
     await pool.query('UPDATE sessions SET last_seen_at = NOW() WHERE token_hash = $1', [hashToken(token)])
   }
-  return { user: { id: row.user_id, username: row.username, isAdmin: row.is_admin }, token, expiresAt: row.expires_at, csrfToken: row.csrf_token }
-
+  return { user: { id: row.user_id, username: row.username, isAdmin: row.is_admin }, token, expiresAt: row.expires_at, lastSeenAt: row.last_seen_at, csrfToken: '', csrfTokenHash: row.csrf_token_hash }
 }
 
-export function verifyCsrf(request: FastifyRequest, expectedToken: string): boolean {
+export function verifyCsrf(request: FastifyRequest, session: Session): boolean {
   const provided = request.headers['x-csrf-token']
-  if (typeof provided !== 'string' || provided.length !== expectedToken.length) return false
-  return timingSafeEqual(Buffer.from(provided), Buffer.from(expectedToken))
+  if (typeof provided !== 'string' || !/^[a-f0-9]{64}$/.test(provided)) return false
+  const providedHash = Buffer.from(hashCsrfToken(provided), 'hex')
+  const expectedHash = Buffer.from(session.csrfTokenHash, 'hex')
+  return providedHash.length === expectedHash.length && timingSafeEqual(providedHash, expectedHash)
 }
 
 export async function revokeSession(token: string | undefined): Promise<void> {
@@ -86,11 +89,18 @@ export async function revokeAllSessions(userId: string): Promise<void> {
 }
 
 export async function touchSession(session: Session): Promise<void> {
-  if (Date.now() - session.expiresAt.getTime() < sessionTtlMs - 60 * 60 * 1000) return
+  if (Date.now() - session.lastSeenAt.getTime() < 15 * 60 * 1000) return
   await pool.query('UPDATE sessions SET last_seen_at = NOW() WHERE token_hash = $1 AND revoked_at IS NULL', [hashToken(session.token)])
 }
 
 export function setSessionCookie(reply: FastifyReply, session: Session): void {
+  reply.setCookie(CSRF_COOKIE, session.csrfToken, {
+    httpOnly: false,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    path: '/',
+    expires: session.expiresAt,
+  })
   reply.setCookie(SESSION_COOKIE, session.token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
@@ -101,7 +111,9 @@ export function setSessionCookie(reply: FastifyReply, session: Session): void {
 }
 
 export function clearSessionCookie(reply: FastifyReply): void {
-  reply.clearCookie(SESSION_COOKIE, { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/' })
+  const options = { secure: process.env.NODE_ENV === 'production', sameSite: 'lax' as const, path: '/' }
+  reply.clearCookie(SESSION_COOKIE, { ...options, httpOnly: true })
+  reply.clearCookie(CSRF_COOKIE, options)
 }
 
 export async function requireAuth(request: FastifyRequest, reply: FastifyReply): Promise<Session | null> {

@@ -1,0 +1,92 @@
+import argon2 from 'argon2'
+import { createHash, randomBytes } from 'node:crypto'
+import type { FastifyReply, FastifyRequest } from 'fastify'
+import { pool } from './db.js'
+
+export const SESSION_COOKIE = 'homedash_session'
+const sessionTtlMs = Number(process.env.SESSION_TTL_DAYS ?? 30) * 24 * 60 * 60 * 1000
+
+type User = { id: string; username: string }
+type Session = { user: User; token: string; expiresAt: Date }
+
+declare module 'fastify' {
+  interface FastifyRequest { auth?: Session }
+}
+
+const hashToken = (token: string) => createHash('sha256').update(token).digest('hex')
+
+export async function hashPassword(password: string): Promise<string> {
+  return argon2.hash(password, { type: argon2.argon2id })
+}
+
+export async function verifyPassword(hash: string, password: string): Promise<boolean> {
+  return argon2.verify(hash, password)
+}
+
+export async function ensureBootstrapUser(): Promise<void> {
+  const username = process.env.BOOTSTRAP_USERNAME
+  const password = process.env.BOOTSTRAP_PASSWORD
+  if (!username || !password) return
+  const existing = await pool.query('SELECT id FROM users LIMIT 1')
+  if (existing.rowCount === 0) {
+    await pool.query('INSERT INTO users (username, password_hash) VALUES ($1, $2)', [username, await hashPassword(password)])
+    console.log('Created initial HomeDash user from bootstrap configuration')
+  }
+}
+
+const dummyPasswordHash = '$argon2id$v=19$m=65536,t=3,p=4$ZHVtbXktc2FsdA$0t1L8xR0a9hYQ3Qj8f2D4w'
+
+export async function authenticate(username: string, password: string): Promise<User | null> {
+  const result = await pool.query<{ id: string; username: string; password_hash: string; is_active: boolean }>(
+    'SELECT id, username, password_hash, is_active FROM users WHERE username = $1', [username],
+  )
+  const user = result.rows[0]
+  const validPassword = await verifyPassword(user?.password_hash ?? dummyPasswordHash, password).catch(() => false)
+  if (!user || !user.is_active || !validPassword) return null
+  return { id: user.id, username: user.username }
+}
+
+export async function createSession(user: User): Promise<Session> {
+  const token = randomBytes(32).toString('hex')
+  const expiresAt = new Date(Date.now() + sessionTtlMs)
+  await pool.query('INSERT INTO sessions (token_hash, user_id, expires_at) VALUES ($1, $2, $3)', [hashToken(token), user.id, expiresAt])
+  return { user, token, expiresAt }
+}
+
+export async function getSession(token: string | undefined): Promise<Session | null> {
+  if (!token) return null
+  const result = await pool.query<{ user_id: string; username: string; expires_at: Date }>(
+    `SELECT users.id AS user_id, users.username, sessions.expires_at FROM sessions JOIN users ON users.id = sessions.user_id
+     WHERE sessions.token_hash = $1 AND sessions.revoked_at IS NULL AND sessions.expires_at > NOW() AND users.is_active = TRUE`, [hashToken(token)],
+  )
+  const row = result.rows[0]
+  if (!row) return null
+  return { user: { id: row.user_id, username: row.username }, token, expiresAt: row.expires_at }
+}
+
+export async function revokeSession(token: string | undefined): Promise<void> {
+  if (token) await pool.query('UPDATE sessions SET revoked_at = NOW() WHERE token_hash = $1 AND revoked_at IS NULL', [hashToken(token)])
+}
+
+export function setSessionCookie(reply: FastifyReply, session: Session): void {
+  reply.setCookie(SESSION_COOKIE, session.token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    path: '/',
+    expires: session.expiresAt,
+  })
+}
+
+export function clearSessionCookie(reply: FastifyReply): void {
+  reply.clearCookie(SESSION_COOKIE, { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/' })
+}
+
+export async function requireAuth(request: FastifyRequest, reply: FastifyReply): Promise<void> {
+  const session = await getSession(request.cookies[SESSION_COOKIE])
+  if (!session) {
+    await reply.code(401).send({ error: 'Authentication required' })
+    return
+  }
+  request.auth = session
+}

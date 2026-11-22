@@ -13,6 +13,19 @@ services:
       BOOTSTRAP_PASSWORD: ${BOOTSTRAP_PASSWORD:-}
       NOTIFICATION_CENTER_URL: ${NOTIFICATION_CENTER_URL:-}
       NOTIFICATION_CENTER_READ_TOKEN: ${NOTIFICATION_CENTER_READ_TOKEN:-}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/health/ready || exit 1"]
+      interval: 10s
+      timeout: 5s
+      start_period: 20s
+      retries: 6
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     depends_on:
       postgres:
         condition: service_healthy
@@ -23,11 +36,26 @@ services:
   web:
     build:
       context: ./apps/web
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      start_period: 10s
+      retries: 6
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx
+      - /var/run
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     depends_on:
       api:
         condition: service_healthy
     ports:
-      - "127.0.0.1:8080:80"
+      - "127.0.0.1:8080:8080"
     networks:
       - homedash-internal
     restart: unless-stopped
@@ -42,6 +70,10 @@ services:
       - "127.0.0.1:5432:5432"
     volumes:
       - homedash-postgres-data:/var/lib/postgresql/data
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s

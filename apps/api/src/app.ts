@@ -1,19 +1,37 @@
 import Fastify, { type FastifyInstance } from 'fastify'
+import { randomUUID } from 'node:crypto'
 import cors from '@fastify/cors'
 import cookie from '@fastify/cookie'
 import rateLimit from '@fastify/rate-limit'
 import { config } from './config.js'
+import { pool } from './db.js'
 import { createDevelopmentSources, createSnapshotService } from './snapshot.js'
 import { authenticate, clearSessionCookie, createSession, getSession, requireAuth, revokeSession, SESSION_COOKIE, setSessionCookie, verifyCsrf } from './auth.js'
 
 export async function buildApp(): Promise<FastifyInstance> {
-  const app = Fastify({ logger: true, bodyLimit: 16 * 1024 })
+  const app = Fastify({
+    logger: {
+      level: config.logLevel,
+      redact: ['req.headers.cookie', 'req.headers.authorization', 'res.headers["set-cookie"]'],
+    },
+    bodyLimit: 16 * 1024,
+    requestIdHeader: 'x-request-id',
+    genReqId: () => randomUUID(),
+  })
   await app.register(cookie)
   await app.register(cors, { origin: config.corsOrigin, credentials: true })
   await app.register(rateLimit, { max: 100, timeWindow: '1 minute' })
   const snapshotService = createSnapshotService(createDevelopmentSources())
 
-  app.get('/health', async () => ({ status: 'ok' }))
+  app.get('/health', async (_request, reply) => {
+    try {
+      await pool.query('SELECT 1')
+      return { status: 'ok' }
+    } catch {
+      return reply.code(503).send({ status: 'unavailable' })
+    }
+  })
+  app.get('/health/live', async () => ({ status: 'ok' }))
 
   app.post('/api/v1/auth/login', { config: { rateLimit: { max: 5, timeWindow: '1 minute' } } }, async (request, reply) => {
     const body = request.body as { username?: string; password?: string } | undefined

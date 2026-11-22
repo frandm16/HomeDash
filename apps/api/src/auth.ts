@@ -2,9 +2,10 @@ import argon2 from 'argon2'
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import { pool } from './db.js'
+import { config } from './config.js'
 
 export const SESSION_COOKIE = 'homedash_session'
-const sessionTtlMs = Number(process.env.SESSION_TTL_DAYS ?? 30) * 24 * 60 * 60 * 1000
+const sessionTtlMs = config.sessionTtlDays * 24 * 60 * 60 * 1000
 
 type User = { id: string; username: string }
 type Session = { user: User; token: string; expiresAt: Date; csrfToken: string }

@@ -1,6 +1,7 @@
 import { createNotificationCenterAdapter, type NotificationCenterAdapter } from './adapters/notification-center.js'
 import { serviceCatalog } from './adapters/service-catalog.js'
 import type { DashboardNotification, DashboardSnapshot, ServiceSummary } from './types.js'
+import { config } from './config.js'
 
 type SnapshotSources = {
   notifications: NotificationCenterAdapter
@@ -78,7 +79,7 @@ export const createDevelopmentSources = (): SnapshotSources => {
     notifications: createNotificationCenterAdapter({
       baseUrl,
       readToken,
-      timeoutMs: Number(process.env.NOTIFICATION_CENTER_TIMEOUT_MS ?? 5000),
+      timeoutMs: config.notificationCenterTimeoutMs,
     }),
   }
 }

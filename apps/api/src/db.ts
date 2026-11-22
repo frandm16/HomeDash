@@ -1,8 +1,14 @@
 import pg from 'pg'
+import { config } from './config.js'
 
 const { Pool } = pg
 
-export const pool = new Pool({ connectionString: process.env.DATABASE_URL })
+export const pool = new Pool({
+  connectionString: config.databaseUrl,
+  connectionTimeoutMillis: 5000,
+  idleTimeoutMillis: 30_000,
+  max: 10,
+})
 
 export async function migrate(): Promise<void> {
   await pool.query(`

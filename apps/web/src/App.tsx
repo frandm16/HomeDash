@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent, PointerEvent, ReactNode } from 'react'
 import { createBookmark, createWidget, deleteBookmark, deleteWidget, fetchBookmarks, fetchDashboard, fetchPerformance, fetchProfiles, fetchWidgetDefinitions, fetchWidgets, getSession, login, logout, openEvents, updateBookmark, updateWidget, type AuthUser, type Bookmark, type DashboardProfile, type DashboardSnapshot, type PerformanceSnapshot, type Widget, type WidgetDefinition as ApiWidgetDefinition } from './api'
-import { findOpenLayout, GRID_COLUMNS, moveWidget } from './grid'
+import { findOpenLayout, GRID_COLUMNS, GRID_ROWS, moveWidget } from './grid'
 import { widgetRegistry, type WidgetData, type WidgetRenderProps } from './widgets'
 import './App.css'
 
@@ -124,9 +124,28 @@ function WidgetSettings({ widget, onClose, onSave }: { widget: Widget; onClose: 
           </>
         )}
 
+        <div className="settings-section-divider"/>
+        <p className="kicker">CLICK REDIRECTION (OPTIONAL)</p>
+        <label>Redirect URL on click
+          <input
+            type="url"
+            value={String(config.redirectUrl ?? '')}
+            onChange={e => setConfig(prev => ({ ...prev, redirectUrl: e.target.value }))}
+            placeholder="https://proxmox.lan:8006 or https://..."
+          />
+        </label>
+        <label className="check-label">
+          <input
+            type="checkbox"
+            checked={config.redirectNewTab !== false}
+            onChange={e => setConfig(prev => ({ ...prev, redirectNewTab: e.target.checked }))}
+          />
+          Open redirection in a new tab
+        </label>
+
         <div className="dialog-actions">
           <button className="button button-quiet" onClick={onClose}>Cancel</button>
-          <button className="button button-primary" onClick={() => onSave(config)}>Save style</button>
+          <button className="button button-primary" onClick={() => onSave(config)}>Save settings</button>
         </div>
       </section>
     </div>
@@ -150,12 +169,89 @@ function Dashboard({ user, onLogout }: { user: AuthUser; onLogout: () => void })
   const updateConfiguration=(widget:Widget,configuration:Record<string,unknown>)=>{setSettingsWidget(null);saveWidgets(widgets.map(item=>item.id===widget.id?{...item,configuration}:item))}
   const removeBookmark=async(bookmark:Bookmark)=>{try{await deleteBookmark(bookmark.id);setBookmarks(current=>current.filter(item=>item.id!==bookmark.id))}catch{setSaveState('error')}}
   const bookmarkSaved=(saved:Bookmark)=>setBookmarks(current=>bookmarkDialog?.bookmark?current.map(item=>item.id===saved.id?saved:item):[...current,saved])
-  const getCell=(clientX:number,clientY:number)=>{const grid=gridRef.current;if(!grid)return null;const rect=grid.getBoundingClientRect(),style=getComputedStyle(grid),gapX=parseFloat(style.columnGap)||0,gapY=parseFloat(style.rowGap)||0,displayedColumns=window.innerWidth<=420?2:window.innerWidth<=720?4:GRID_COLUMNS,cellWidth=(rect.width-parseFloat(style.paddingLeft)-parseFloat(style.paddingRight)-gapX*(displayedColumns-1))/displayedColumns,cellHeight=parseFloat(style.gridTemplateRows.split(' ')[0])||82;return{x:Math.max(0,Math.min(displayedColumns-1,Math.floor((clientX-rect.left)/(cellWidth+gapX)))),y:Math.max(0,Math.floor((clientY-rect.top)/(cellHeight+gapY)))}}
-  const onDragStart=(event:PointerEvent,widget:Widget,mode:'move'|'resize'='move',edge?:string)=>{if(!editing)return;event.preventDefault();event.stopPropagation();(event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);dragRef.current={id:widget.id,pointerId:event.pointerId,startX:event.clientX,startY:event.clientY,origin:widget.layout,moved:false,mode,edge};setDraggingId(widget.id);setDropCell({...widget.layout})}
-  const onDragMove=(event:PointerEvent)=>{const drag=dragRef.current;if(!drag||drag.pointerId!==event.pointerId)return;const cell=getCell(event.clientX,event.clientY);if(cell){const widget=widgets.find(item=>item.id===drag.id);if(!widget)return;const columns=window.innerWidth<=420?2:window.innerWidth<=720?4:GRID_COLUMNS,grid=gridRef.current,rect=grid?.getBoundingClientRect(),cellWidth=rect?rect.width/columns:1,cellHeight=parseFloat(getComputedStyle(grid!).gridTemplateRows.split(' ')[0])||72,min=widgetRegistry[widget.widgetType]?.minSize??{width:1,height:1};if(drag.mode==='move')setDropCell({...drag.origin,x:Math.max(0,Math.min(columns-drag.origin.width,cell.x)),y:cell.y});else{const dx=Math.round((event.clientX-drag.startX)/cellWidth),dy=Math.round((event.clientY-drag.startY)/cellHeight),edge=drag.edge??'se';let{x,y,width,height}=drag.origin;if(edge.includes('e'))width=Math.max(min.width,Math.min(columns-x,width+dx));if(edge.includes('s'))height=Math.max(min.height,height+dy);if(edge.includes('w')){const nextWidth=Math.max(min.width,Math.min(width-dx,drag.origin.x+drag.origin.width));x=drag.origin.x+drag.origin.width-nextWidth;width=nextWidth}if(edge.includes('n')){const nextHeight=Math.max(min.height,drag.origin.height-dy);y=drag.origin.y+drag.origin.height-nextHeight;height=nextHeight}setDropCell({x,y,width,height})}if(Math.abs(event.clientX-drag.startX)+Math.abs(event.clientY-drag.startY)>5)drag.moved=true}}
-  const onDragEnd=(event:PointerEvent)=>{const drag=dragRef.current;if(!drag||drag.pointerId!==event.pointerId)return;dragRef.current=null;setDraggingId(null);setDropCell(null);if(!drag.moved)return;const widget=widgets.find(item=>item.id===drag.id);if(!widget)return;const target=drag.mode==='resize'?dropCell:((cell)=>cell?{...drag.origin,x:Math.min((window.innerWidth<=420?2:window.innerWidth<=720?4:GRID_COLUMNS)-drag.origin.width,cell.x),y:cell.y}:null)(getCell(event.clientX,event.clientY));if(!target)return;const definition=widgetRegistry[widget.widgetType],result=moveWidget(widgets,widget.id,target,definition?.minSize??{width:1,height:1});saveWidgets(result)}
+  const getCell=(clientX:number,clientY:number)=>{
+    const grid=gridRef.current;if(!grid)return null;
+    const rect=grid.getBoundingClientRect(),style=getComputedStyle(grid);
+    const gapX=parseFloat(style.columnGap)||0,gapY=parseFloat(style.rowGap)||0;
+    const isMobile=window.innerWidth<=720;
+    const displayedColumns=window.innerWidth<=420?2:window.innerWidth<=720?4:GRID_COLUMNS;
+    const displayedRows=isMobile?12:GRID_ROWS;
+    const cellWidth=(rect.width-parseFloat(style.paddingLeft)-parseFloat(style.paddingRight)-gapX*(displayedColumns-1))/displayedColumns;
+    const cellHeight=(rect.height-parseFloat(style.paddingTop)-parseFloat(style.paddingBottom)-gapY*(displayedRows-1))/displayedRows;
+    return{
+      x:Math.max(0,Math.min(displayedColumns-1,Math.floor((clientX-rect.left)/(cellWidth+gapX)))),
+      y:Math.max(0,Math.min(displayedRows-1,Math.floor((clientY-rect.top)/(cellHeight+gapY))))
+    }
+  }
+  const onDragStart=(event:PointerEvent,widget:Widget,mode:'move'|'resize'='move',edge?:string)=>{
+    if(!editing)return;event.preventDefault();event.stopPropagation();
+    (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+    dragRef.current={id:widget.id,pointerId:event.pointerId,startX:event.clientX,startY:event.clientY,origin:widget.layout,moved:false,mode,edge};
+    setDraggingId(widget.id);setDropCell({...widget.layout})
+  }
+  const onDragMove=(event:PointerEvent)=>{
+    const drag=dragRef.current;if(!drag||drag.pointerId!==event.pointerId)return;
+    const cell=getCell(event.clientX,event.clientY);
+    if(cell){
+      const widget=widgets.find(item=>item.id===drag.id);if(!widget)return;
+      const isMobile=window.innerWidth<=720;
+      const columns=window.innerWidth<=420?2:window.innerWidth<=720?4:GRID_COLUMNS;
+      const rows=isMobile?12:GRID_ROWS;
+      const grid=gridRef.current,rect=grid?.getBoundingClientRect(),style=grid?getComputedStyle(grid):null;
+      const gapX=style?parseFloat(style.columnGap)||0:0,gapY=style?parseFloat(style.rowGap)||0:0;
+      const padX=style?(parseFloat(style.paddingLeft)||0)+(parseFloat(style.paddingRight)||0):0;
+      const padY=style?(parseFloat(style.paddingTop)||0)+(parseFloat(style.paddingBottom)||0):0;
+      const cellWidth=rect?(rect.width-padX-gapX*(columns-1))/columns:1;
+      const cellHeight=rect?(rect.height-padY-gapY*(rows-1))/rows:1;
+      const min=widgetRegistry[widget.widgetType]?.minSize??{width:1,height:1};
+      if(drag.mode==='move'){
+        setDropCell({
+          ...drag.origin,
+          x:Math.max(0,Math.min(columns-drag.origin.width,cell.x)),
+          y:Math.max(0,Math.min(rows-drag.origin.height,cell.y))
+        })
+      }else{
+        const dx=Math.round((event.clientX-drag.startX)/cellWidth);
+        const dy=Math.round((event.clientY-drag.startY)/cellHeight);
+        const edge=drag.edge??'se';
+        let{x,y,width,height}=drag.origin;
+        if(edge.includes('e'))width=Math.max(min.width,Math.min(columns-x,width+dx));
+        if(edge.includes('s'))height=Math.max(min.height,Math.min(rows-y,height+dy));
+        if(edge.includes('w')){
+          const nextWidth=Math.max(min.width,Math.min(width-dx,drag.origin.x+drag.origin.width));
+          x=drag.origin.x+drag.origin.width-nextWidth;
+          width=nextWidth;
+        }
+        if(edge.includes('n')){
+          const nextHeight=Math.max(min.height,Math.min(height-dy,drag.origin.y+drag.origin.height));
+          y=drag.origin.y+drag.origin.height-nextHeight;
+          height=nextHeight;
+        }
+        setDropCell({x,y,width,height})
+      }
+      if(Math.abs(event.clientX-drag.startX)+Math.abs(event.clientY-drag.startY)>5)drag.moved=true;
+    }
+  }
+  const onDragEnd=(event:PointerEvent)=>{
+    const drag=dragRef.current;if(!drag||drag.pointerId!==event.pointerId)return;
+    dragRef.current=null;setDraggingId(null);setDropCell(null);
+    if(!drag.moved)return;
+    const widget=widgets.find(item=>item.id===drag.id);if(!widget)return;
+    const isMobile=window.innerWidth<=720;
+    const columns=window.innerWidth<=420?2:window.innerWidth<=720?4:GRID_COLUMNS;
+    const rows=isMobile?12:GRID_ROWS;
+    const target=drag.mode==='resize'?dropCell:((cell)=>cell?{
+      ...drag.origin,
+      x:Math.min(columns-drag.origin.width,cell.x),
+      y:Math.min(rows-drag.origin.height,cell.y)
+    }:null)(getCell(event.clientX,event.clientY));
+    if(!target)return;
+    const definition=widgetRegistry[widget.widgetType];
+    const result=moveWidget(widgets,widget.id,target,definition?.minSize??{width:1,height:1});
+    saveWidgets(result)
+  }
   return <main className="app-frame"><div className="corner-menu" ref={menuRef}><button className="gear-button" aria-label="Open dashboard menu" aria-haspopup="menu" aria-expanded={menuOpen} onClick={()=>setMenuOpen(value=>!value)}><Icon name="gear" size={19}/></button>{menuOpen&&<div className="gear-dropdown" role="menu"><div className="menu-user">{user.username}</div><button role="menuitem" onClick={()=>{setEditing(value=>!value);setMenuOpen(false)}}><Icon name={editing?'check':'edit'} size={15}/>{editing?'Done editing':'Edit dashboard'}</button><button role="menuitem" onClick={()=>{setMenuOpen(false);onLogout()}}><Icon name="logout" size={15}/>Log out</button></div>}</div>
-    {!enabledWidgets.length?<section className="widget-grid empty-dashboard" aria-label="Dashboard widgets"><p>Your canvas is empty.</p><button className="button button-primary" onClick={()=>{setEditing(true);setShowCatalog(true)}}>Add widget</button></section>:<section ref={gridRef} className={`widget-grid ${editing?'editing':''}`} aria-label="Dashboard widgets">{enabledWidgets.map(widget=>{const definition=widgetRegistry[widget.widgetType];const props={data,state:connection==='offline'?'offline' as const:connection==='stale'?'stale' as const:snapshot?'ready' as const:'loading' as const,message:snapshot?.sourceStates?.notifications,editing,configuration:widget.configuration,onConfigurationChange:(configuration:Record<string,unknown>)=>updateConfiguration(widget,configuration),onBookmarkChange:()=>setBookmarkDialog({}),onBookmarkDelete:removeBookmark,onBookmarkEdit:(bookmark:Bookmark)=>setBookmarkDialog({bookmark})};return <article key={widget.id} className={`widget-shell ${editing?'is-editing':''} ${draggingId===widget.id?'is-dragging':''}`} style={{gridColumn:`${widget.layout.x+1}/span ${widget.layout.width}`,gridRow:`${widget.layout.y+1}/span ${widget.layout.height}`}}>{editing&&<div className="widget-toolbar"><button className="drag-handle" aria-label={`Move ${definition?.type??'widget'}`} title="Drag to move" onPointerDown={event=>onDragStart(event,widget)} onPointerMove={onDragMove} onPointerUp={onDragEnd} onPointerCancel={onDragEnd}><Icon name="move" size={13}/></button><strong>{definition?.type.replaceAll('-',' ')}</strong><div className="widget-toolbar-actions">{['search','bookmarks','notifications'].includes(widget.widgetType)&&<button onClick={()=>setSettingsWidget(widget)} aria-label="Widget settings" title="Settings"><Icon name="settings" size={14}/></button>}<button className="remove-widget" onClick={()=>void removeWidget(widget)} aria-label="Remove widget" title="Remove"><Icon name="remove" size={13}/></button></div></div>}{definition&&<WidgetRenderer definition={definition} props={props}/ >}{editing&&['n','s','e','w','ne','nw','se','sw'].map(edge=><span key={edge} className={`resize-handle resize-${edge}`} role="separator" aria-label={`Resize ${definition?.type??'widget'} ${edge}`} onPointerDown={event=>onDragStart(event,widget,'resize',edge)} onPointerMove={onDragMove} onPointerUp={onDragEnd} onPointerCancel={onDragEnd}/>)}</article>})}{dropCell&&draggingId&&<div className="drop-indicator" style={{gridColumn:`${dropCell.x+1}/span ${dropCell.width}`,gridRow:`${dropCell.y+1}/span ${dropCell.height}`}}/>}</section>}
+    {!enabledWidgets.length?<section className="widget-grid empty-dashboard" aria-label="Dashboard widgets"><p>Your canvas is empty.</p><button className="button button-primary" onClick={()=>{setEditing(true);setShowCatalog(true)}}>Add widget</button></section>:<section ref={gridRef} className={`widget-grid ${editing?'editing':''}`} aria-label="Dashboard widgets">{enabledWidgets.map(widget=>{const definition=widgetRegistry[widget.widgetType];const hasRedirect=Boolean(widget.configuration.redirectUrl)&&!editing;const props={data,state:connection==='offline'?'offline' as const:connection==='stale'?'stale' as const:snapshot?'ready' as const:'loading' as const,message:snapshot?.sourceStates?.notifications,editing,configuration:widget.configuration,onConfigurationChange:(configuration:Record<string,unknown>)=>updateConfiguration(widget,configuration),onBookmarkChange:()=>setBookmarkDialog({}),onBookmarkDelete:removeBookmark,onBookmarkEdit:(bookmark:Bookmark)=>setBookmarkDialog({bookmark})};return <article key={widget.id} className={`widget-shell ${editing?'is-editing':''} ${draggingId===widget.id?'is-dragging':''} ${hasRedirect?'has-redirect':''}`} style={{gridColumn:`${widget.layout.x+1}/span ${widget.layout.width}`,gridRow:`${widget.layout.y+1}/span ${widget.layout.height}`}} onClick={(event)=>{if(editing)return;const target=event.target as HTMLElement;if(target.closest('a, button, input, select, textarea, [role="button"], .resize-handle, .widget-toolbar'))return;const url=String(widget.configuration.redirectUrl??'').trim();if(!url)return;const inNewTab=widget.configuration.redirectNewTab!==false;try{const parsed=new URL(url);if(['http:','https:'].includes(parsed.protocol)){window.open(url,inNewTab?'_blank':'_self','noopener,noreferrer')}}catch{if(url.startsWith('/'))window.location.href=url}}}>{editing&&<div className="widget-toolbar"><button className="drag-handle" aria-label={`Move ${definition?.type??'widget'}`} title="Drag to move" onPointerDown={event=>onDragStart(event,widget)} onPointerMove={onDragMove} onPointerUp={onDragEnd} onPointerCancel={onDragEnd}><Icon name="move" size={13}/></button><strong>{definition?.type.replaceAll('-',' ')}</strong><div className="widget-toolbar-actions"><button onClick={()=>setSettingsWidget(widget)} aria-label="Widget settings" title="Settings"><Icon name="settings" size={14}/></button><button className="remove-widget" onClick={()=>void removeWidget(widget)} aria-label="Remove widget" title="Remove"><Icon name="remove" size={13}/></button></div></div>}{definition&&<WidgetRenderer definition={definition} props={props}/>}{hasRedirect&&<span className="redirect-hint-arrow" aria-hidden="true" title={`Redirects to ${widget.configuration.redirectUrl}`}>↗</span>}{editing&&['n','s','e','w','ne','nw','se','sw'].map(edge=><span key={edge} className={`resize-handle resize-${edge}`} role="separator" aria-label={`Resize ${definition?.type??'widget'} ${edge}`} onPointerDown={event=>onDragStart(event,widget,'resize',edge)} onPointerMove={onDragMove} onPointerUp={onDragEnd} onPointerCancel={onDragEnd}/>)}</article>})}{dropCell&&draggingId&&<div className="drop-indicator" style={{gridColumn:`${dropCell.x+1}/span ${dropCell.width}`,gridRow:`${dropCell.y+1}/span ${dropCell.height}`}}/>}</section>}
     {showCatalog&&<WidgetCatalog definitions={definitions} widgets={widgets} onClose={()=>setShowCatalog(false)} onAdd={addWidget}/>} {bookmarkDialog&&profile&&<BookmarkDialog profileId={profile.id} bookmark={bookmarkDialog.bookmark} onClose={()=>setBookmarkDialog(null)} onSaved={bookmarkSaved}/>} {settingsWidget&&<WidgetSettings widget={settingsWidget} onClose={()=>setSettingsWidget(null)} onSave={configuration=>updateConfiguration(settingsWidget,configuration)}/>}
   </main>
 }

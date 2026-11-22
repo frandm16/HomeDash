@@ -489,16 +489,16 @@ export const widgetRegistry: Record<string, WidgetDefinition> = {
   search: {
     type: 'search',
     version: 1,
-    defaultSize: { width: 6, height: 1 },
-    minSize: { width: 2, height: 1 },
+    defaultSize: { width: 4, height: 1 },
+    minSize: { width: 1, height: 1 },
     configuration: { provider: 'google', searchStyle: 'pill', openInNewTab: true, showEngineIcon: true },
     render: SearchWidget
   },
   bookmarks: {
     type: 'bookmarks',
     version: 1,
-    defaultSize: { width: 4, height: 2 },
-    minSize: { width: 2, height: 1 },
+    defaultSize: { width: 3, height: 2 },
+    minSize: { width: 1, height: 1 },
     configuration: { bookmarkStyle: 'tiles', iconSize: 'normal' },
     render: BookmarksWidget
   },
@@ -506,7 +506,7 @@ export const widgetRegistry: Record<string, WidgetDefinition> = {
     type: 'notifications',
     version: 1,
     defaultSize: { width: 3, height: 3 },
-    minSize: { width: 2, height: 1 },
+    minSize: { width: 1, height: 1 },
     configuration: { notificationStyle: 'cards', maxItems: 6 },
     render: NotificationsWidget
   },
@@ -514,7 +514,7 @@ export const widgetRegistry: Record<string, WidgetDefinition> = {
     type: 'homelab-performance',
     version: 1,
     defaultSize: { width: 3, height: 2 },
-    minSize: { width: 2, height: 1 },
+    minSize: { width: 1, height: 1 },
     configuration: {},
     render: PerformanceWidget
   },
@@ -522,7 +522,7 @@ export const widgetRegistry: Record<string, WidgetDefinition> = {
     type: 'service-status',
     version: 1,
     defaultSize: { width: 3, height: 2 },
-    minSize: { width: 2, height: 1 },
+    minSize: { width: 1, height: 1 },
     configuration: {},
     render: ServicesWidget
   }

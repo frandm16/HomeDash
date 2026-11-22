@@ -1,22 +1,38 @@
 import type { GridLayout, Widget } from './api'
 
 export const GRID_COLUMNS = 12
+export const GRID_ROWS = 12
+
 export function normalizeLayout(layout: GridLayout, minSize: { width: number; height: number }): GridLayout {
   const width = Math.max(minSize.width, Math.min(GRID_COLUMNS, Math.round(layout.width)))
-  const height = Math.max(minSize.height, Math.round(layout.height))
-  return { x: Math.max(0, Math.min(GRID_COLUMNS - width, Math.round(layout.x))), y: Math.max(0, Math.round(layout.y)), width, height }
+  const height = Math.max(minSize.height, Math.min(GRID_ROWS, Math.round(layout.height)))
+  return {
+    x: Math.max(0, Math.min(GRID_COLUMNS - width, Math.round(layout.x))),
+    y: Math.max(0, Math.min(GRID_ROWS - height, Math.round(layout.y))),
+    width,
+    height
+  }
 }
-export function overlaps(a: GridLayout, b: GridLayout): boolean { return a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y }
+
+export function overlaps(a: GridLayout, b: GridLayout): boolean {
+  return a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y
+}
 
 function findFreeLayout(layout: GridLayout, occupied: GridLayout[], minY = layout.y): GridLayout | null {
-  const maxY = 1000
-  for (let y = minY; y <= maxY; y += 1) {
+  for (let y = minY; y <= GRID_ROWS - layout.height; y += 1) {
     for (let x = 0; x <= GRID_COLUMNS - layout.width; x += 1) {
       const candidate = { ...layout, x, y }
       if (!occupied.some(item => overlaps(candidate, item))) return candidate
     }
   }
-  return null
+  for (let y = 0; y < minY; y += 1) {
+    for (let x = 0; x <= GRID_COLUMNS - layout.width; x += 1) {
+      const candidate = { ...layout, x, y }
+      if (!occupied.some(item => overlaps(candidate, item))) return candidate
+    }
+  }
+  // Fallback si la pantalla está muy llena
+  return { ...layout, x: 0, y: GRID_ROWS - 1 }
 }
 
 export function moveWidget(widgets: Widget[], id: string, layout: GridLayout, minSize: { width: number; height: number }): Widget[] {
@@ -41,7 +57,7 @@ export function moveWidget(widgets: Widget[], id: string, layout: GridLayout, mi
 export function findOpenLayout(layout: GridLayout, widgets: Widget[], ignoreId?: string): GridLayout {
   const candidate = normalizeLayout(layout, { width: 1, height: 1 })
   const occupied = widgets.filter(widget => widget.isEnabled && widget.id !== ignoreId).map(widget => widget.layout)
-  return findFreeLayout(candidate, occupied, candidate.y) ?? { ...candidate, y: 1000 }
+  return findFreeLayout(candidate, occupied, candidate.y) ?? { ...candidate, y: 0 }
 }
 
 export function placeWidget(widgets: Widget[], widget: Widget, minSize: { width: number; height: number }): Widget[] {

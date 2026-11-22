@@ -11,11 +11,11 @@ export type WidgetDefinition = {
 }
 
 const definitions: WidgetDefinition[] = [
-  { type: 'search', version: 1, defaultConfiguration: { provider: 'google', openInNewTab: true }, minSize: { w: 2, h: 1 }, initialSize: { w: 4, h: 1 }, permissions: [] },
-  { type: 'service-status', version: 1, defaultConfiguration: {}, minSize: { w: 2, h: 2 }, initialSize: { w: 4, h: 3 }, permissions: ['service:read'], refreshIntervalMs: 30_000 },
-  { type: 'notifications', version: 1, defaultConfiguration: {}, minSize: { w: 2, h: 2 }, initialSize: { w: 2, h: 4 }, permissions: ['notification:read'], refreshIntervalMs: 30_000 },
-  { type: 'bookmarks', version: 1, defaultConfiguration: {}, minSize: { w: 2, h: 1 }, initialSize: { w: 4, h: 2 }, permissions: ['bookmark:read'] },
-  { type: 'homelab-performance', version: 1, defaultConfiguration: {}, minSize: { w: 2, h: 2 }, initialSize: { w: 2, h: 2 }, permissions: ['metrics:read'], refreshIntervalMs: 15_000 },
+  { type: 'search', version: 1, defaultConfiguration: { provider: 'google', openInNewTab: true }, minSize: { w: 1, h: 1 }, initialSize: { w: 4, h: 1 }, permissions: [] },
+  { type: 'service-status', version: 1, defaultConfiguration: {}, minSize: { w: 1, h: 1 }, initialSize: { w: 3, h: 2 }, permissions: ['service:read'], refreshIntervalMs: 30_000 },
+  { type: 'notifications', version: 1, defaultConfiguration: {}, minSize: { w: 1, h: 1 }, initialSize: { w: 3, h: 3 }, permissions: ['notification:read'], refreshIntervalMs: 30_000 },
+  { type: 'bookmarks', version: 1, defaultConfiguration: {}, minSize: { w: 1, h: 1 }, initialSize: { w: 4, h: 2 }, permissions: ['bookmark:read'] },
+  { type: 'homelab-performance', version: 1, defaultConfiguration: {}, minSize: { w: 1, h: 1 }, initialSize: { w: 2, h: 2 }, permissions: ['metrics:read'], refreshIntervalMs: 15_000 },
 ]
 
 export function listWidgetDefinitions(): WidgetDefinition[] { return definitions }

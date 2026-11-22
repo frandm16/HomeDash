@@ -21,6 +21,7 @@ export const up = `
     last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     expires_at TIMESTAMPTZ NOT NULL,
     revoked_at TIMESTAMPTZ,
+    csrf_token TEXT,
     csrf_token_hash TEXT
   );
 

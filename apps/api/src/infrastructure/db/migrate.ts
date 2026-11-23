@@ -3,13 +3,16 @@ import { pool } from '../../db.js'
 import { name as initialName, up as initialUp, version as initialVersion } from './migrations/001_initial.js'
 import { name as serviceCatalogName, up as serviceCatalogUp, version as serviceCatalogVersion } from './migrations/002_service_catalog_admin.js'
 import { name as mvpBookmarksName, up as mvpBookmarksUp, version as mvpBookmarksVersion } from './migrations/003_mvp_bookmarks.js'
+import { name as widgetBookmarksName, up as widgetBookmarksUp, version as widgetBookmarksVersion } from './migrations/004_widget_scoped_bookmarks.js'
 
 type Migration = { version: number; name: string; up: string }
 const migrations: Migration[] = [
   { version: initialVersion, name: initialName, up: initialUp },
   { version: serviceCatalogVersion, name: serviceCatalogName, up: serviceCatalogUp },
   { version: mvpBookmarksVersion, name: mvpBookmarksName, up: mvpBookmarksUp },
+  { version: widgetBookmarksVersion, name: widgetBookmarksName, up: widgetBookmarksUp },
 ].sort((left, right) => left.version - right.version)
+export const LATEST_MIGRATION_VERSION = migrations[migrations.length - 1]!.version
 if (new Set(migrations.map((migration) => migration.version)).size !== migrations.length) throw new Error('Duplicate migration version')
 
 async function ensureLedger(client: PoolClient): Promise<void> {

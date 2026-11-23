@@ -96,3 +96,39 @@ test('ownership-scoped repository results are used for authenticated users', asy
     assert.deepEqual(response.json().dashboards, [{ id: 'owned' }])
   }, deps)
 })
+
+test('widget deletion succeeds without body and bookmarks scope to widgetId', async () => {
+  let deletedWidgetId = ''
+  let createdBookmarkInput: Record<string, unknown> | undefined
+  const widgetId = '22222222-2222-4222-8222-222222222222'
+  const deps = dependencies({
+    dashboard: {
+      ...dependencies().dashboard,
+      deleteWidget: async (_userId: string, id: string) => {
+        deletedWidgetId = id
+        return id === widgetId
+      },
+      createBookmark: async (_userId: string, _profileId: string | undefined, input: Record<string, unknown>) => {
+        createdBookmarkInput = input
+        return { id: '33333333-3333-4333-8333-333333333333', ...input, sortOrder: 0 }
+      },
+    } as unknown as AppDependencies['dashboard'],
+  })
+  await withApp(async (app) => {
+    const headers = { cookie: `${SESSION_COOKIE}=${session.token}`, 'x-csrf-token': session.csrfToken }
+    const delRes = await app.inject({ method: 'DELETE', url: `/api/v1/widgets/${widgetId}`, headers })
+    assert.equal(delRes.statusCode, 200)
+    assert.equal(deletedWidgetId, widgetId)
+    assert.deepEqual(delRes.json(), { ok: true })
+
+    const bmRes = await app.inject({
+      method: 'POST',
+      url: '/api/v1/profiles/profile-1/bookmarks',
+      headers,
+      payload: { name: 'Proxmox', url: 'https://proxmox.local', widgetId },
+    })
+    assert.equal(bmRes.statusCode, 201)
+    assert.equal(createdBookmarkInput?.widgetId, widgetId)
+    assert.equal(bmRes.json().widgetId, widgetId)
+  }, deps)
+})

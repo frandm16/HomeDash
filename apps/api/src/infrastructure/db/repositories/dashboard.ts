@@ -4,7 +4,7 @@ export type ProfileKey = 'desktop' | 'wall' | 'mobile'
 
 type DashboardInput = { name: string }
 type WidgetInput = { widgetType: string; widgetVersion?: number; configuration?: unknown; layout?: unknown; isEnabled?: boolean }
-type BookmarkInput = { name: string; url: string; icon?: string; category?: string; sortOrder?: number }
+type BookmarkInput = { name: string; url: string; icon?: string; category?: string; sortOrder?: number; widgetId?: string }
 
 const profileKeys: ProfileKey[] = ['desktop', 'wall', 'mobile']
 
@@ -69,20 +69,35 @@ export async function deleteWidget(userId: string, widgetId: string): Promise<bo
   return result.rowCount === 1
 }
 
-export async function listBookmarks(userId: string, _profileId?: string) {
-  return (await pool.query(`SELECT b.id, b.name, b.url, b.icon, b.category, b.sort_order AS "sortOrder", b.created_at AS "createdAt", b.updated_at AS "updatedAt" FROM bookmarks b WHERE b.user_id = $1 ORDER BY b.sort_order, b.created_at`, [userId])).rows
+export async function listBookmarks(userId: string, _profileId?: string, widgetId?: string) {
+  if (widgetId) {
+    return (await pool.query(`SELECT b.id, b.widget_id AS "widgetId", b.name, b.url, b.icon, b.category, b.sort_order AS "sortOrder", b.created_at AS "createdAt", b.updated_at AS "updatedAt" FROM bookmarks b WHERE b.user_id = $1 AND b.widget_id = $2 ORDER BY b.sort_order, b.created_at`, [userId, widgetId])).rows
+  }
+  return (await pool.query(`SELECT b.id, b.widget_id AS "widgetId", b.name, b.url, b.icon, b.category, b.sort_order AS "sortOrder", b.created_at AS "createdAt", b.updated_at AS "updatedAt" FROM bookmarks b WHERE b.user_id = $1 ORDER BY b.sort_order, b.created_at`, [userId])).rows
 }
 
 export async function createBookmark(userId: string, profileId: string | undefined, input: BookmarkInput) {
+  if (input.widgetId) {
+    const widget = (await pool.query<{ id: string; profile_id: string }>(
+      `SELECT w.id, w.profile_id FROM widget_instances w JOIN dashboard_profiles p ON p.id = w.profile_id JOIN dashboards d ON d.id = p.dashboard_id WHERE w.id = $1 AND d.user_id = $2`,
+      [input.widgetId, userId],
+    )).rows[0]
+    if (!widget) return undefined
+    const result = await pool.query(
+      `INSERT INTO bookmarks (profile_id, user_id, widget_id, name, url, icon, category, sort_order) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id, widget_id AS "widgetId", name, url, icon, category, sort_order AS "sortOrder"`,
+      [widget.profile_id, userId, widget.id, input.name, input.url, input.icon ?? null, input.category ?? null, input.sortOrder ?? 0],
+    )
+    return result.rows[0]
+  }
   const dashboardId = profileId ? profileId : (await ensureDashboard(userId))
   const profile = (await pool.query<{ id: string }>(`SELECT p.id FROM dashboard_profiles p JOIN dashboards d ON d.id = p.dashboard_id WHERE d.user_id = $1 AND (p.id = $2 OR p.profile_key = 'desktop') ORDER BY (p.id = $2) DESC LIMIT 1`, [userId, dashboardId])).rows[0]
   if (!profile) return undefined
-  const result = await pool.query(`INSERT INTO bookmarks (profile_id, user_id, name, url, icon, category, sort_order) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id, name, url, icon, category, sort_order AS "sortOrder"`, [profile.id, userId, input.name, input.url, input.icon ?? null, input.category ?? null, input.sortOrder ?? 0])
+  const result = await pool.query(`INSERT INTO bookmarks (profile_id, user_id, name, url, icon, category, sort_order) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id, widget_id AS "widgetId", name, url, icon, category, sort_order AS "sortOrder"`, [profile.id, userId, input.name, input.url, input.icon ?? null, input.category ?? null, input.sortOrder ?? 0])
   return result.rows[0]
 }
 
 export async function updateBookmark(userId: string, id: string, input: Partial<BookmarkInput>) {
-  return (await pool.query(`UPDATE bookmarks b SET name = COALESCE($3, b.name), url = COALESCE($4, b.url), icon = COALESCE($5, b.icon), category = COALESCE($6, b.category), sort_order = COALESCE($7, b.sort_order), updated_at = NOW() WHERE b.id = $1 AND b.user_id = $2 RETURNING b.id, b.name, b.url, b.icon, b.category, b.sort_order AS "sortOrder", b.updated_at AS "updatedAt"`, [id, userId, input.name ?? null, input.url ?? null, input.icon ?? null, input.category ?? null, input.sortOrder ?? null])).rows[0]
+  return (await pool.query(`UPDATE bookmarks b SET name = COALESCE($3, b.name), url = COALESCE($4, b.url), icon = COALESCE($5, b.icon), category = COALESCE($6, b.category), sort_order = COALESCE($7, b.sort_order), updated_at = NOW() WHERE b.id = $1 AND b.user_id = $2 RETURNING b.id, b.widget_id AS "widgetId", b.name, b.url, b.icon, b.category, b.sort_order AS "sortOrder", b.updated_at AS "updatedAt"`, [id, userId, input.name ?? null, input.url ?? null, input.icon ?? null, input.category ?? null, input.sortOrder ?? null])).rows[0]
 }
 
 export async function deleteBookmark(userId: string, id: string): Promise<boolean> {

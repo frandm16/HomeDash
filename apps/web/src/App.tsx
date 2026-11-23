@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent, PointerEvent, ReactNode } from 'react'
 import {
   createBookmark,
@@ -100,7 +100,7 @@ function LoginScreen({ onAuthenticated }: { onAuthenticated: (user: AuthUser) =>
   )
 }
 
-function BookmarkDialog({ bookmark, profileId, onClose, onSaved }: { bookmark?: Bookmark; profileId: string; onClose: () => void; onSaved: (bookmark: Bookmark) => void }) {
+function BookmarkDialog({ bookmark, profileId, widgetId, onClose, onSaved }: { bookmark?: Bookmark; profileId: string; widgetId?: string; onClose: () => void; onSaved: (bookmark: Bookmark) => void }) {
   const [name, setName] = useState(bookmark?.name ?? '')
   const [url, setUrl] = useState(bookmark?.url ?? '')
   const [category, setCategory] = useState(bookmark?.category ?? '')
@@ -125,7 +125,8 @@ function BookmarkDialog({ bookmark, profileId, onClose, onSaved }: { bookmark?: 
             name,
             url,
             icon: icon.trim() || undefined,
-            category: category.trim() || undefined
+            category: category.trim() || undefined,
+            ...(widgetId ? { widgetId } : {})
           })
       onSaved(result)
       onClose()
@@ -238,13 +239,18 @@ function WidgetSettings({
   const isCountdown = type === 'countdown-event'
   const isStickyNote = type === 'sticky-note'
 
+  const widgetBookmarks = useMemo(
+    () => (isBookmarks ? data.bookmarks.filter(b => b.widgetId === widget.id) : data.bookmarks),
+    [data.bookmarks, isBookmarks, widget.id]
+  )
+
   const availableCategories = useMemo(() => {
     const set = new Set<string>()
-    data.bookmarks.forEach(b => {
+    widgetBookmarks.forEach(b => {
       if (b.category?.trim()) set.add(b.category.trim())
     })
     return Array.from(set)
-  }, [data.bookmarks])
+  }, [widgetBookmarks])
 
   return (
     <div className="overlay" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) onClose() }}>
@@ -312,7 +318,7 @@ function WidgetSettings({
                 {availableCategories.length > 0 && (
                   <label>Filter by Bookmark Category
                     <select value={String(config.categoryFilter ?? 'all')} onChange={e => setConfig(prev => ({ ...prev, categoryFilter: e.target.value }))}>
-                      <option value="all">All categories ({data.bookmarks.length} links)</option>
+                      <option value="all">All categories ({widgetBookmarks.length} links)</option>
                       {availableCategories.map(cat => (
                         <option key={cat} value={cat}>{cat}</option>
                       ))}
@@ -577,6 +583,7 @@ function WidgetSettings({
                 <WidgetRenderer
                   definition={definition}
                   props={{
+                    widgetId: widget.id,
                     data,
                     state: 'ready',
                     editing: false,
@@ -600,22 +607,78 @@ function WidgetSettings({
   )
 }
 
-function WidgetRenderer({ definition, props }: { definition: (typeof widgetRegistry)[string]; props: WidgetRenderProps }) {
+const CACHE_KEY = 'homedash_cache_v1'
+type StartpageCache = { user?: AuthUser; profile?: DashboardProfile; widgets?: Widget[]; bookmarks?: Bookmark[] }
+
+function readCache(): StartpageCache {
+  try {
+    const raw = localStorage.getItem(CACHE_KEY)
+    return raw ? (JSON.parse(raw) as StartpageCache) : {}
+  } catch {
+    return {}
+  }
+}
+
+function writeCache(patch: Partial<StartpageCache>): void {
+  try {
+    const next = { ...readCache(), ...patch }
+    localStorage.setItem(CACHE_KEY, JSON.stringify(next))
+  } catch {
+    /* Ignore storage quota errors. */
+  }
+}
+
+function clearCache(): void {
+  try {
+    localStorage.removeItem(CACHE_KEY)
+  } catch {
+    /* Ignore storage errors. */
+  }
+}
+
+const WidgetRenderer = memo(function WidgetRenderer({ definition, props }: { definition: (typeof widgetRegistry)[string]; props: WidgetRenderProps }) {
   const Widget = definition.render
   return <Widget {...props} />
+})
+
+type GridMetrics = {
+  left: number
+  top: number
+  cellWidth: number
+  cellHeight: number
+  gapX: number
+  gapY: number
+  columns: number
+  rows: number
+}
+
+function measureGrid(grid: HTMLElement): GridMetrics {
+  const rect = grid.getBoundingClientRect()
+  const style = getComputedStyle(grid)
+  const gapX = parseFloat(style.columnGap) || 0
+  const gapY = parseFloat(style.rowGap) || 0
+  const isMobile = window.innerWidth <= 720
+  const columns = window.innerWidth <= 420 ? 2 : window.innerWidth <= 720 ? 4 : GRID_COLUMNS
+  const rows = isMobile ? 12 : GRID_ROWS
+  const padX = (parseFloat(style.paddingLeft) || 0) + (parseFloat(style.paddingRight) || 0)
+  const padY = (parseFloat(style.paddingTop) || 0) + (parseFloat(style.paddingBottom) || 0)
+  const cellWidth = (rect.width - padX - gapX * (columns - 1)) / columns
+  const cellHeight = (rect.height - padY - gapY * (rows - 1)) / rows
+  return { left: rect.left, top: rect.top, cellWidth, cellHeight, gapX, gapY, columns, rows }
 }
 
 function Dashboard({ user, onLogout }: { user: AuthUser; onLogout: () => void }) {
+  const initialCache = useMemo(() => readCache(), [])
   const [snapshot, setSnapshot] = useState<DashboardSnapshot | null>(null)
   const [performance, setPerformance] = useState<PerformanceSnapshot | null>(null)
-  const [bookmarks, setBookmarks] = useState<Bookmark[]>([])
-  const [widgets, setWidgets] = useState<Widget[]>([])
+  const [bookmarks, setBookmarks] = useState<Bookmark[]>(() => initialCache.bookmarks ?? [])
+  const [widgets, setWidgets] = useState<Widget[]>(() => initialCache.widgets ?? [])
   const [definitions, setDefinitions] = useState<ApiWidgetDefinition[]>([])
-  const [profile, setProfile] = useState<DashboardProfile | null>(null)
+  const [profile, setProfile] = useState<DashboardProfile | null>(() => initialCache.profile ?? null)
   const [editing, setEditing] = useState(false)
   const [showCatalog, setShowCatalog] = useState(false)
   const [selectedSlot, setSelectedSlot] = useState<{ x: number; y: number } | null>(null)
-  const [bookmarkDialog, setBookmarkDialog] = useState<{ bookmark?: Bookmark } | null>(null)
+  const [bookmarkDialog, setBookmarkDialog] = useState<{ bookmark?: Bookmark; widgetId?: string } | null>(null)
   const [settingsWidget, setSettingsWidget] = useState<Widget | null>(null)
   const [connection, setConnection] = useState<'loading' | 'online' | 'stale' | 'offline'>('loading')
   const [, setSaveState] = useState<ToastState>('saved')
@@ -625,20 +688,25 @@ function Dashboard({ user, onLogout }: { user: AuthUser; onLogout: () => void })
 
   const saveTimer = useRef<number | undefined>(undefined)
   const saveQueue = useRef<Promise<unknown>>(Promise.resolve())
+  const deletedWidgetIdsRef = useRef<Set<string>>(new Set())
   const gridRef = useRef<HTMLElement | null>(null)
-  const dragRef = useRef<{ id: string; pointerId: number; startX: number; startY: number; origin: Widget['layout']; moved: boolean; mode: 'move' | 'resize'; edge?: string } | null>(null)
+  const dragRef = useRef<{ id: string; pointerId: number; startX: number; startY: number; origin: Widget['layout']; moved: boolean; mode: 'move' | 'resize'; edge?: string; metrics: GridMetrics } | null>(null)
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const [dropCell, setDropCell] = useState<{ x: number; y: number; width: number; height: number } | null>(null)
 
-  const data: WidgetData = {
+  const data: WidgetData = useMemo(() => ({
     services: snapshot?.services ?? [],
     notifications: snapshot?.notifications ?? [],
     unreadNotifications: snapshot?.unreadNotifications ?? 0,
     bookmarks,
     performance
-  }
+  }), [snapshot, bookmarks, performance])
 
   const enabledWidgets = useMemo(() => widgets.filter(widget => widget.isEnabled && widgetRegistry[widget.widgetType]), [widgets])
+  const hasPerfWidget = useMemo(
+    () => enabledWidgets.some(w => w.widgetType === 'homelab-performance' || w.widgetType === 'performance-graph' || w.widgetType === 'performance-kpi'),
+    [enabledWidgets]
+  )
 
   // Compute occupied grid cells for generating empty "+" slots in edit mode
   const occupiedCells = useMemo(() => {
@@ -707,23 +775,35 @@ function Dashboard({ user, onLogout }: { user: AuthUser; onLogout: () => void })
 
   useEffect(() => {
     const controller = new AbortController()
-    Promise.all([fetchDashboard(controller.signal), fetchPerformance(controller.signal)])
-      .then(([dash, metrics]) => {
+    const requests: Promise<unknown>[] = [
+      fetchDashboard(controller.signal).then(dash => {
         setSnapshot(dash)
-        setPerformance(metrics)
         setConnection('online')
       })
-      .catch(() => setConnection('offline'))
-
-    const perfTimer = window.setInterval(() => {
-      fetchPerformance().then(setPerformance).catch(() => undefined)
-    }, 5000)
+    ]
+    if (hasPerfWidget) {
+      requests.push(fetchPerformance(controller.signal).then(setPerformance))
+    }
+    Promise.all(requests).catch(() => setConnection('offline'))
 
     return () => {
       controller.abort()
-      window.clearInterval(perfTimer)
     }
-  }, [])
+  }, [hasPerfWidget])
+
+  useEffect(() => {
+    if (!hasPerfWidget) return
+    const poll = () => {
+      if (!document.hidden) fetchPerformance().then(setPerformance).catch(() => undefined)
+    }
+    const perfTimer = window.setInterval(poll, 5000)
+    const onVisibility = () => { if (!document.hidden) poll() }
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => {
+      window.clearInterval(perfTimer)
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
+  }, [hasPerfWidget])
 
   useEffect(() => {
     let source: EventSource | undefined
@@ -759,41 +839,58 @@ function Dashboard({ user, onLogout }: { user: AuthUser; onLogout: () => void })
     let cancelled = false
     fetchProfiles().then(result => {
       const chosen = result.profiles.find(item => item.profileKey === 'desktop') ?? result.profiles[0]
-      if (chosen && !cancelled) setProfile(chosen)
-    }).catch(() => undefined)
-    fetchWidgetDefinitions().then(result => {
-      if (!cancelled) setDefinitions(result.widgets)
+      if (chosen && !cancelled) {
+        setProfile(chosen)
+        writeCache({ profile: chosen })
+      }
     }).catch(() => undefined)
     return () => { cancelled = true }
   }, [])
 
   useEffect(() => {
+    if (!showCatalog || definitions.length > 0) return
+    let cancelled = false
+    fetchWidgetDefinitions().then(result => {
+      if (!cancelled) setDefinitions(result.widgets)
+    }).catch(() => undefined)
+    return () => { cancelled = true }
+  }, [showCatalog, definitions.length])
+
+  useEffect(() => {
     if (!profile) return
     let cancelled = false
-    Promise.all([fetchWidgets(profile.id), fetchBookmarks(profile.id)]).then(async ([result, bookmarkResult]) => {
+    Promise.all([fetchWidgets(profile.id), fetchBookmarks(profile.id)]).then(([result, bookmarkResult]) => {
       if (cancelled) return
+      const activeWidgets = result.widgets.filter(w => !deletedWidgetIdsRef.current.has(w.id))
       setBookmarks(bookmarkResult.bookmarks)
-      if (!cancelled) setWidgets(result.widgets)
+      setWidgets(activeWidgets)
+      writeCache({ widgets: activeWidgets, bookmarks: bookmarkResult.bookmarks })
     }).catch(() => undefined)
     return () => { cancelled = true }
   }, [profile])
 
-  const saveWidgets = (next: Widget[]) => {
+  const saveWidgets = useCallback((next: Widget[]) => {
     setWidgets(next)
+    writeCache({ widgets: next })
     setSaveState('saving')
     if (saveTimer.current) window.clearTimeout(saveTimer.current)
     saveTimer.current = window.setTimeout(() => {
-      const persist = () => Promise.all(next.map(widget => updateWidget(widget.id, { layout: widget.layout, configuration: widget.configuration })))
+      const toSave = next.filter(widget => !deletedWidgetIdsRef.current.has(widget.id))
+      const persist = () => Promise.all(toSave.map(widget => updateWidget(widget.id, { layout: widget.layout, configuration: widget.configuration })))
       saveQueue.current = saveQueue.current.then(persist, persist).then(saved => {
-        setWidgets(current => current.map(widget => {
-          const response = saved.find(item => item.id === widget.id)
-          const sent = next.find(item => item.id === widget.id)
-          return response && sent && JSON.stringify(widget.layout) === JSON.stringify(sent.layout) && JSON.stringify(widget.configuration) === JSON.stringify(sent.configuration) ? { ...widget, updatedAt: response.updatedAt } : widget
-        }))
+        setWidgets(current => {
+          const updated = current.map(widget => {
+            const response = saved.find(item => item.id === widget.id)
+            const sent = toSave.find(item => item.id === widget.id)
+            return response && sent && JSON.stringify(widget.layout) === JSON.stringify(sent.layout) && JSON.stringify(widget.configuration) === JSON.stringify(sent.configuration) ? { ...widget, updatedAt: response.updatedAt } : widget
+          })
+          writeCache({ widgets: updated })
+          return updated
+        })
         setSaveState('saved')
       }).catch(() => setSaveState('error'))
     }, 450)
-  }
+  }, [])
 
   const addWidget = async (definition: ApiWidgetDefinition) => {
     if (!profile) return
@@ -811,7 +908,11 @@ function Dashboard({ user, onLogout }: { user: AuthUser; onLogout: () => void })
 
     try {
       const created = await createWidget(profile.id, definition.type, definition.defaultConfiguration, layout)
-      setWidgets(current => [...current, created])
+      setWidgets(current => {
+        const next = [...current, created]
+        writeCache({ widgets: next })
+        return next
+      })
       setShowCatalog(false)
       setSelectedSlot(null)
     } catch {
@@ -820,54 +921,66 @@ function Dashboard({ user, onLogout }: { user: AuthUser; onLogout: () => void })
   }
 
   const removeWidget = async (widget: Widget) => {
+    deletedWidgetIdsRef.current.add(widget.id)
+    const previousWidgets = widgets
+    const nextWidgets = widgets.filter(item => item.id !== widget.id)
+    setWidgets(nextWidgets)
+    writeCache({ widgets: nextWidgets })
     try {
-      setWidgets(current => current.filter(item => item.id !== widget.id))
       await deleteWidget(widget.id)
+      setBookmarks(current => {
+        const nextBookmarks = current.filter(b => b.widgetId !== widget.id)
+        writeCache({ bookmarks: nextBookmarks })
+        return nextBookmarks
+      })
     } catch {
+      deletedWidgetIdsRef.current.delete(widget.id)
+      setWidgets(previousWidgets)
+      writeCache({ widgets: previousWidgets })
       setSaveState('error')
     }
   }
 
-  const updateConfiguration = (widget: Widget, configuration: Record<string, unknown>) => {
+  const updateConfiguration = useCallback((widget: Widget, configuration: Record<string, unknown>) => {
     setSettingsWidget(null)
-    saveWidgets(widgets.map(item => item.id === widget.id ? { ...item, configuration } : item))
-  }
+    setWidgets(current => {
+      const next = current.map(item => item.id === widget.id ? { ...item, configuration } : item)
+      saveWidgets(next)
+      return next
+    })
+  }, [saveWidgets])
 
-  const removeBookmark = async (bookmark: Bookmark) => {
+  const removeBookmark = useCallback(async (bookmark: Bookmark) => {
     try {
       await deleteBookmark(bookmark.id)
-      setBookmarks(current => current.filter(item => item.id !== bookmark.id))
+      setBookmarks(current => {
+        const next = current.filter(item => item.id !== bookmark.id)
+        writeCache({ bookmarks: next })
+        return next
+      })
     } catch {
       setSaveState('error')
     }
-  }
+  }, [])
 
-  const bookmarkSaved = (saved: Bookmark) => setBookmarks(current => bookmarkDialog?.bookmark ? current.map(item => item.id === saved.id ? saved : item) : [...current, saved])
+  const bookmarkSaved = (saved: Bookmark) => setBookmarks(current => {
+    const next = bookmarkDialog?.bookmark ? current.map(item => item.id === saved.id ? saved : item) : [...current, saved]
+    writeCache({ bookmarks: next })
+    return next
+  })
 
-  const getCell = (clientX: number, clientY: number) => {
-    const grid = gridRef.current
-    if (!grid) return null
-    const rect = grid.getBoundingClientRect()
-    const style = getComputedStyle(grid)
-    const gapX = parseFloat(style.columnGap) || 0
-    const gapY = parseFloat(style.rowGap) || 0
-    const isMobile = window.innerWidth <= 720
-    const displayedColumns = window.innerWidth <= 420 ? 2 : window.innerWidth <= 720 ? 4 : GRID_COLUMNS
-    const displayedRows = isMobile ? 12 : GRID_ROWS
-    const cellWidth = (rect.width - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight) - gapX * (displayedColumns - 1)) / displayedColumns
-    const cellHeight = (rect.height - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom) - gapY * (displayedRows - 1)) / displayedRows
-    return {
-      x: Math.max(0, Math.min(displayedColumns - 1, Math.floor((clientX - rect.left) / (cellWidth + gapX)))),
-      y: Math.max(0, Math.min(displayedRows - 1, Math.floor((clientY - rect.top) / (cellHeight + gapY))))
-    }
-  }
+  const cellFromMetrics = (clientX: number, clientY: number, metrics: GridMetrics) => ({
+    x: Math.max(0, Math.min(metrics.columns - 1, Math.floor((clientX - metrics.left) / (metrics.cellWidth + metrics.gapX)))),
+    y: Math.max(0, Math.min(metrics.rows - 1, Math.floor((clientY - metrics.top) / (metrics.cellHeight + metrics.gapY))))
+  })
 
   const onDragStart = (event: PointerEvent, widget: Widget, mode: 'move' | 'resize' = 'move', edge?: string) => {
-    if (!editing) return
+    if (!editing || !gridRef.current) return
     event.preventDefault()
     event.stopPropagation()
     ;(event.currentTarget as HTMLElement).setPointerCapture(event.pointerId)
-    dragRef.current = { id: widget.id, pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, origin: widget.layout, moved: false, mode, edge }
+    const metrics = measureGrid(gridRef.current)
+    dragRef.current = { id: widget.id, pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, origin: widget.layout, moved: false, mode, edge, metrics }
     setDraggingId(widget.id)
     setDropCell({ ...widget.layout })
   }
@@ -875,48 +988,38 @@ function Dashboard({ user, onLogout }: { user: AuthUser; onLogout: () => void })
   const onDragMove = (event: PointerEvent) => {
     const drag = dragRef.current
     if (!drag || drag.pointerId !== event.pointerId) return
-    const cell = getCell(event.clientX, event.clientY)
-    if (cell) {
-      const widget = widgets.find(item => item.id === drag.id)
-      if (!widget) return
-      const isMobile = window.innerWidth <= 720
-      const columns = window.innerWidth <= 420 ? 2 : window.innerWidth <= 720 ? 4 : GRID_COLUMNS
-      const rows = isMobile ? 12 : GRID_ROWS
-      const grid = gridRef.current, rect = grid?.getBoundingClientRect(), style = grid ? getComputedStyle(grid) : null
-      const gapX = style ? parseFloat(style.columnGap) || 0 : 0, gapY = style ? parseFloat(style.rowGap) || 0 : 0
-      const padX = style ? (parseFloat(style.paddingLeft) || 0) + (parseFloat(style.paddingRight) || 0) : 0
-      const padY = style ? (parseFloat(style.paddingTop) || 0) + (parseFloat(style.paddingBottom) || 0) : 0
-      const cellWidth = rect ? (rect.width - padX - gapX * (columns - 1)) / columns : 1
-      const cellHeight = rect ? (rect.height - padY - gapY * (rows - 1)) / rows : 1
-      const min = widgetRegistry[widget.widgetType]?.minSize ?? { width: 1, height: 1 }
+    const { metrics } = drag
+    const cell = cellFromMetrics(event.clientX, event.clientY, metrics)
+    const widget = widgets.find(item => item.id === drag.id)
+    if (!widget) return
+    const min = widgetRegistry[widget.widgetType]?.minSize ?? { width: 1, height: 1 }
 
-      if (drag.mode === 'move') {
-        setDropCell({
-          ...drag.origin,
-          x: Math.max(0, Math.min(columns - drag.origin.width, cell.x)),
-          y: Math.max(0, Math.min(rows - drag.origin.height, cell.y))
-        })
-      } else {
-        const dx = Math.round((event.clientX - drag.startX) / cellWidth)
-        const dy = Math.round((event.clientY - drag.startY) / cellHeight)
-        const edge = drag.edge ?? 'se'
-        let { x, y, width, height } = drag.origin
-        if (edge.includes('e')) width = Math.max(min.width, Math.min(columns - x, width + dx))
-        if (edge.includes('s')) height = Math.max(min.height, Math.min(rows - y, height + dy))
-        if (edge.includes('w')) {
-          const nextWidth = Math.max(min.width, Math.min(width - dx, drag.origin.x + drag.origin.width))
-          x = drag.origin.x + drag.origin.width - nextWidth
-          width = nextWidth
-        }
-        if (edge.includes('n')) {
-          const nextHeight = Math.max(min.height, Math.min(height - dy, drag.origin.y + drag.origin.height))
-          y = drag.origin.y + drag.origin.height - nextHeight
-          height = nextHeight
-        }
-        setDropCell({ x, y, width, height })
+    if (drag.mode === 'move') {
+      setDropCell({
+        ...drag.origin,
+        x: Math.max(0, Math.min(metrics.columns - drag.origin.width, cell.x)),
+        y: Math.max(0, Math.min(metrics.rows - drag.origin.height, cell.y))
+      })
+    } else {
+      const dx = Math.round((event.clientX - drag.startX) / metrics.cellWidth)
+      const dy = Math.round((event.clientY - drag.startY) / metrics.cellHeight)
+      const edge = drag.edge ?? 'se'
+      let { x, y, width, height } = drag.origin
+      if (edge.includes('e')) width = Math.max(min.width, Math.min(metrics.columns - x, width + dx))
+      if (edge.includes('s')) height = Math.max(min.height, Math.min(metrics.rows - y, height + dy))
+      if (edge.includes('w')) {
+        const nextWidth = Math.max(min.width, Math.min(width - dx, drag.origin.x + drag.origin.width))
+        x = drag.origin.x + drag.origin.width - nextWidth
+        width = nextWidth
       }
-      if (Math.abs(event.clientX - drag.startX) + Math.abs(event.clientY - drag.startY) > 5) drag.moved = true
+      if (edge.includes('n')) {
+        const nextHeight = Math.max(min.height, Math.min(height - dy, drag.origin.y + drag.origin.height))
+        y = drag.origin.y + drag.origin.height - nextHeight
+        height = nextHeight
+      }
+      setDropCell({ x, y, width, height })
     }
+    if (Math.abs(event.clientX - drag.startX) + Math.abs(event.clientY - drag.startY) > 5) drag.moved = true
   }
 
   const onDragEnd = (event: PointerEvent) => {
@@ -928,14 +1031,13 @@ function Dashboard({ user, onLogout }: { user: AuthUser; onLogout: () => void })
     if (!drag.moved) return
     const widget = widgets.find(item => item.id === drag.id)
     if (!widget) return
-    const isMobile = window.innerWidth <= 720
-    const columns = window.innerWidth <= 420 ? 2 : window.innerWidth <= 720 ? 4 : GRID_COLUMNS
-    const rows = isMobile ? 12 : GRID_ROWS
-    const target = drag.mode === 'resize' ? dropCell : ((cell) => cell ? {
+    const { metrics } = drag
+    const cell = cellFromMetrics(event.clientX, event.clientY, metrics)
+    const target = drag.mode === 'resize' ? dropCell : {
       ...drag.origin,
-      x: Math.min(columns - drag.origin.width, cell.x),
-      y: Math.min(rows - drag.origin.height, cell.y)
-    } : null)(getCell(event.clientX, event.clientY))
+      x: Math.min(metrics.columns - drag.origin.width, cell.x),
+      y: Math.min(metrics.rows - drag.origin.height, cell.y)
+    }
     if (!target) return
     const definition = widgetRegistry[widget.widgetType]
     const result = moveWidget(widgets, widget.id, target, definition?.minSize ?? { width: 1, height: 1 })
@@ -1083,15 +1185,16 @@ function Dashboard({ user, onLogout }: { user: AuthUser; onLogout: () => void })
             }
 
             const props = {
+              widgetId: widget.id,
               data,
               state: connection === 'offline' ? 'offline' as const : connection === 'stale' ? 'stale' as const : snapshot ? 'ready' as const : 'loading' as const,
               message: snapshot?.sourceStates?.notifications,
               editing,
               configuration: widget.configuration,
               onConfigurationChange: (configuration: Record<string, unknown>) => updateConfiguration(widget, configuration),
-              onBookmarkChange: () => setBookmarkDialog({}),
+              onBookmarkChange: () => setBookmarkDialog({ widgetId: widget.id }),
               onBookmarkDelete: removeBookmark,
-              onBookmarkEdit: (bookmark: Bookmark) => setBookmarkDialog({ bookmark })
+              onBookmarkEdit: (bookmark: Bookmark) => setBookmarkDialog({ bookmark, widgetId: widget.id })
             }
 
             return (
@@ -1208,6 +1311,7 @@ function Dashboard({ user, onLogout }: { user: AuthUser; onLogout: () => void })
       {bookmarkDialog && profile && (
         <BookmarkDialog
           profileId={profile.id}
+          widgetId={bookmarkDialog.widgetId}
           bookmark={bookmarkDialog.bookmark}
           onClose={() => setBookmarkDialog(null)}
           onSaved={bookmarkSaved}
@@ -1467,13 +1571,19 @@ function WidgetCatalog({
 }
 
 function App() {
-  const [user, setUser] = useState<AuthUser | null>(null)
-  const [checking, setChecking] = useState(true)
+  const [user, setUser] = useState<AuthUser | null>(() => readCache().user ?? null)
+  const [checking, setChecking] = useState(() => !readCache().user)
 
   useEffect(() => {
     getSession()
-      .then(result => setUser(result.user))
-      .catch(() => setUser(null))
+      .then(result => {
+        setUser(result.user)
+        writeCache({ user: result.user })
+      })
+      .catch(() => {
+        clearCache()
+        setUser(null)
+      })
       .finally(() => setChecking(false))
   }, [])
 
@@ -1488,12 +1598,22 @@ function App() {
     )
   }
 
-  if (!user) return <LoginScreen onAuthenticated={setUser}/>
+  if (!user) {
+    return (
+      <LoginScreen
+        onAuthenticated={authenticatedUser => {
+          writeCache({ user: authenticatedUser })
+          setUser(authenticatedUser)
+        }}
+      />
+    )
+  }
 
   return (
     <Dashboard
       user={user}
       onLogout={async () => {
+        clearCache()
         await logout().catch(() => undefined)
         setUser(null)
       }}

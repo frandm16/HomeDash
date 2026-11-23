@@ -10,6 +10,7 @@ export type WidgetData = {
 }
 
 export type WidgetRenderProps = {
+  widgetId?: string
   data: WidgetData
   state: 'loading' | 'ready' | 'empty' | 'offline' | 'stale' | 'error'
   message?: string
@@ -195,19 +196,20 @@ function SearchWidget({ configuration }: WidgetRenderProps) {
    ========================================================================= */
 
 export function BookmarkFavicon({ url, icon, name }: { url: string; icon?: string; name: string }) {
-  const [imgFailed, setImgFailed] = React.useState(false)
+  const [failedSrc, setFailedSrc] = React.useState<string | null>(null)
   const trimmedIcon = (icon ?? '').trim()
 
   // 1. Custom Image URL or Data URI
   if (trimmedIcon && (trimmedIcon.startsWith('http://') || trimmedIcon.startsWith('https://') || trimmedIcon.startsWith('data:') || trimmedIcon.startsWith('/'))) {
-    if (!imgFailed) {
+    if (failedSrc !== trimmedIcon) {
       return (
         <span className="bookmark-icon custom-img-wrapper">
           <img
             src={trimmedIcon}
             alt=""
             loading="lazy"
-            onError={() => setImgFailed(true)}
+            decoding="async"
+            onError={() => setFailedSrc(trimmedIcon)}
             className="bookmark-favicon-img"
           />
         </span>
@@ -227,16 +229,17 @@ export function BookmarkFavicon({ url, icon, name }: { url: string; icon?: strin
   } catch {
     domain = ''
   }
-  const faviconUrl = domain && !imgFailed ? `https://www.google.com/s2/favicons?domain=${domain}&sz=128` : ''
+  const faviconUrl = domain ? `https://www.google.com/s2/favicons?domain=${domain}&sz=128` : ''
 
-  if (faviconUrl) {
+  if (faviconUrl && failedSrc !== faviconUrl) {
     return (
       <span className="bookmark-icon favicon-wrapper">
         <img
           src={faviconUrl}
           alt=""
           loading="lazy"
-          onError={() => setImgFailed(true)}
+          decoding="async"
+          onError={() => setFailedSrc(faviconUrl)}
           className="bookmark-favicon-img"
         />
       </span>
@@ -284,14 +287,19 @@ function SingleBookmarkWidget({ data, editing, configuration }: WidgetRenderProp
   )
 }
 
-function BookmarksWidget({ data, state, editing, configuration, onBookmarkChange, onBookmarkDelete, onBookmarkEdit }: WidgetRenderProps) {
+function BookmarksWidget({ widgetId, data, editing, configuration, onBookmarkChange, onBookmarkDelete, onBookmarkEdit }: WidgetRenderProps) {
   const bookmarkStyle = String(configuration?.bookmarkStyle ?? 'tiles')
   const iconSize = String(configuration?.iconSize ?? 'normal')
   const categoryFilter = String(configuration?.categoryFilter ?? 'all')
 
-  const bookmarksToRender = categoryFilter === 'all'
-    ? data.bookmarks
-    : data.bookmarks.filter(b => (b.category || '').toLowerCase() === categoryFilter.toLowerCase())
+  const bookmarksToRender = React.useMemo(() => {
+    const widgetBookmarks = widgetId
+      ? data.bookmarks.filter(b => b.widgetId === widgetId)
+      : data.bookmarks
+    return categoryFilter === 'all'
+      ? widgetBookmarks
+      : widgetBookmarks.filter(b => (b.category || '').toLowerCase() === categoryFilter.toLowerCase())
+  }, [data.bookmarks, widgetId, categoryFilter])
 
   return (
     <section className={`widget-card bookmarks-widget style-${bookmarkStyle} size-${iconSize}`}>
@@ -300,13 +308,12 @@ function BookmarksWidget({ data, state, editing, configuration, onBookmarkChange
           <button className="mini-action add-bookmark-btn" onClick={onBookmarkChange}>＋ Add link</button>
         </div>
       )}
-      <State state={state}/>
-      {state === 'ready' && !bookmarksToRender.length && (
+      {!bookmarksToRender.length && (
         <p className="widget-empty">
           {categoryFilter !== 'all' ? `No bookmarks in category "${categoryFilter}".` : 'No bookmarks saved yet. Add your favorite links.'}
         </p>
       )}
-      {state === 'ready' && bookmarksToRender.length > 0 && (
+      {bookmarksToRender.length > 0 && (
         <div className={`bookmark-layout ${bookmarkStyle}`}>
           {bookmarksToRender.map(bookmark => {
             let host = ''
@@ -842,9 +849,10 @@ function CountdownEventWidget({ configuration }: WidgetRenderProps) {
   const countdownStyle = String(configuration?.countdownStyle ?? 'hero-counter')
 
   React.useEffect(() => {
-    const timer = setInterval(() => setCurrentTimestamp(Date.now()), 1000)
+    const interval = countdownStyle === 'compact-badge' ? 60_000 : 1000
+    const timer = setInterval(() => setCurrentTimestamp(Date.now()), interval)
     return () => clearInterval(timer)
-  }, [])
+  }, [countdownStyle])
 
   if (!targetDateStr) {
     return (

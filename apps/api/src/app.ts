@@ -8,6 +8,7 @@ import cookie from '@fastify/cookie'
 import rateLimit from '@fastify/rate-limit'
 import { config } from './config.js'
 import { pool } from './db.js'
+import { LATEST_MIGRATION_VERSION } from './infrastructure/db/migrate.js'
 import * as dashboardRepository from './infrastructure/db/repositories/dashboard.js'
 import { createService, deleteService, listAllServices, listServices, updateService } from './infrastructure/db/repositories/services.js'
 import { checkServices } from './adapters/service-health.js'
@@ -79,8 +80,8 @@ export async function buildApp(dependencies: AppDependencies = {}): Promise<Fast
   app.get('/health/ready', async (_request, reply) => {
     try {
       const result = await pool.query<{ applied: boolean }>(`SELECT EXISTS (
-        SELECT 1 FROM schema_migrations WHERE version = 3
-      ) AS applied`)
+        SELECT 1 FROM schema_migrations WHERE version = $1
+      ) AS applied`, [LATEST_MIGRATION_VERSION])
       if (!result.rows[0]?.applied) return reply.code(503).send({ status: 'not_ready', checks: { database: 'ready', migrations: 'pending' } })
       return { status: 'ready', checks: { database: 'ready', migrations: 'ready' } }
     } catch {
@@ -182,16 +183,18 @@ export async function buildApp(dependencies: AppDependencies = {}): Promise<Fast
   })
   app.get('/api/v1/profiles/:profileId/bookmarks', async (request) => {
     const params = request.params as { profileId: string }
-    return { bookmarks: await dashboard.listBookmarks(request.auth!.user.id, params.profileId) }
+    const query = request.query as { widgetId?: string }
+    return { bookmarks: await dashboard.listBookmarks(request.auth!.user.id, params.profileId, query.widgetId) }
   })
   app.post('/api/v1/profiles/:profileId/bookmarks', {
     schema: { body: bookmarkBody },
   }, async (request, reply) => {
     const params = request.params as { profileId: string }
-    const body = request.body as { name: string; url: string; icon?: string; category?: string }
+    const body = request.body as { name: string; url: string; icon?: string; category?: string; sortOrder?: number; widgetId?: string }
     if (!['http:', 'https:'].includes(new URL(body.url).protocol) || new URL(body.url).username || new URL(body.url).password) return reply.code(400).send({ error: { code: 'INVALID_URL', message: 'Only public HTTP and HTTPS URLs are allowed', requestId: request.id } })
     const bookmark = await dashboard.createBookmark(request.auth!.user.id, params.profileId, body)
-    if (bookmark) await recordAudit({ userId: request.auth!.user.id, action: 'create', resourceType: 'bookmark', resourceId: bookmark.id })
+    if (!bookmark) return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Profile or widget not found', requestId: request.id } })
+    await recordAudit({ userId: request.auth!.user.id, action: 'create', resourceType: 'bookmark', resourceId: bookmark.id })
     return reply.code(201).send(bookmark)
   })
   app.patch('/api/v1/bookmarks/:bookmarkId', { schema: { body: bookmarkPatchBody } }, async (request, reply) => { const id = (request.params as { bookmarkId: string }).bookmarkId; const patch = request.body as { name?: string; url?: string; icon?: string; category?: string; sortOrder?: number }; if (patch.url) { const parsed = new URL(patch.url); if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password) return reply.code(400).send({ error: { code: 'INVALID_URL', message: 'Only public HTTP and HTTPS URLs are allowed', requestId: request.id } }) } const result = await dashboard.updateBookmark(request.auth!.user.id, id, patch); if (!result) return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Bookmark not found', requestId: request.id } }); await recordAudit({ userId: request.auth!.user.id, action: 'update', resourceType: 'bookmark', resourceId: id }); return result })

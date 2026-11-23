@@ -10,13 +10,14 @@ export type GridLayout = { x: number; y: number; width: number; height: number }
 export type Widget = { id: string; widgetType: string; widgetVersion: number; configuration: Record<string, unknown>; layout: GridLayout; isEnabled: boolean; updatedAt?: string }
 export type WidgetDefinition = { type: string; version: number; defaultConfiguration: Record<string, unknown>; minSize: { w: number; h: number }; initialSize: { w: number; h: number }; permissions: string[]; refreshIntervalMs?: number }
 export type DashboardProfile = { id: string; dashboardId?: string; profileKey: 'desktop' | 'wall' | 'mobile'; layoutVersion: number }
-export type Bookmark = { id: string; name: string; url: string; icon?: string; category?: string; sortOrder: number }
+export type Bookmark = { id: string; widgetId?: string | null; name: string; url: string; icon?: string; category?: string; sortOrder: number }
 export type AuthUser = { id: string; username: string }
 let csrfToken: string | undefined
 export function setCsrfToken(token?: string): void { csrfToken = token }
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? '/api'
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const headers: Record<string, string> = { 'Content-Type': 'application/json', ...init?.headers as Record<string, string> }
+  const headers: Record<string, string> = { ...init?.headers as Record<string, string> }
+  if (init?.body !== undefined && !headers['Content-Type']) headers['Content-Type'] = 'application/json'
   if (csrfToken && init?.method && init.method !== 'GET') headers['X-CSRF-Token'] = csrfToken
   const response = await fetch(`${apiBaseUrl}${path}`, { ...init, credentials: 'include', headers })
   if (!response.ok) throw new Error(`API returned ${response.status}`)

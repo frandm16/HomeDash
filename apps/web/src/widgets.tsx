@@ -196,12 +196,14 @@ function SearchWidget({ configuration }: WidgetRenderProps) {
    ========================================================================= */
 
 export function BookmarkFavicon({ url, icon, name }: { url: string; icon?: string; name: string }) {
-  const [failedSrc, setFailedSrc] = React.useState<string | null>(null)
+  const [failedState, setFailedState] = React.useState<{ key: string; step: number }>({ key: '', step: 0 })
   const trimmedIcon = (icon ?? '').trim()
+  const stateKey = `${url}|${trimmedIcon}`
+  const step = failedState.key === stateKey ? failedState.step : 0
 
   // 1. Custom Image URL or Data URI
   if (trimmedIcon && (trimmedIcon.startsWith('http://') || trimmedIcon.startsWith('https://') || trimmedIcon.startsWith('data:') || trimmedIcon.startsWith('/'))) {
-    if (failedSrc !== trimmedIcon) {
+    if (step === 0) {
       return (
         <span className="bookmark-icon custom-img-wrapper">
           <img
@@ -209,7 +211,7 @@ export function BookmarkFavicon({ url, icon, name }: { url: string; icon?: strin
             alt=""
             loading="lazy"
             decoding="async"
-            onError={() => setFailedSrc(trimmedIcon)}
+            onError={() => setFailedState({ key: stateKey, step: 1 })}
             className="bookmark-favicon-img"
           />
         </span>
@@ -218,28 +220,40 @@ export function BookmarkFavicon({ url, icon, name }: { url: string; icon?: strin
   }
 
   // 2. Custom Emoji or short text symbol
-  if (trimmedIcon && !trimmedIcon.startsWith('http://') && !trimmedIcon.startsWith('https://')) {
+  if (trimmedIcon && !trimmedIcon.startsWith('http://') && !trimmedIcon.startsWith('https://') && !trimmedIcon.startsWith('data:') && !trimmedIcon.startsWith('/')) {
     return <span className="bookmark-icon custom-emoji">{trimmedIcon}</span>
   }
 
-  // 3. Automatic Favicon resolution from URL
+  // 3. Automatic Favicon resolution from URL (Google -> DuckDuckGo -> Direct /favicon.ico)
   let domain = ''
+  let origin = ''
   try {
-    domain = new URL(url).hostname
+    const parsed = new URL(url)
+    domain = parsed.hostname
+    origin = parsed.origin
   } catch {
     domain = ''
+    origin = ''
   }
-  const faviconUrl = domain ? `https://www.google.com/s2/favicons?domain=${domain}&sz=128` : ''
 
-  if (faviconUrl && failedSrc !== faviconUrl) {
+  const candidates = domain
+    ? [
+        `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=128`,
+        `https://icons.duckduckgo.com/ip3/${encodeURIComponent(domain)}.ico`,
+        ...(origin ? [`${origin}/favicon.ico`] : [])
+      ]
+    : []
+
+  const activeSrc = candidates[step]
+  if (activeSrc) {
     return (
       <span className="bookmark-icon favicon-wrapper">
         <img
-          src={faviconUrl}
+          src={activeSrc}
           alt=""
           loading="lazy"
           decoding="async"
-          onError={() => setFailedSrc(faviconUrl)}
+          onError={() => setFailedState({ key: stateKey, step: step + 1 })}
           className="bookmark-favicon-img"
         />
       </span>

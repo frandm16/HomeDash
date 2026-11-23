@@ -494,12 +494,36 @@ export const widgetRegistry: Record<string, WidgetDefinition> = {
     configuration: { provider: 'google', searchStyle: 'pill', openInNewTab: true, showEngineIcon: true },
     render: SearchWidget
   },
+  'search-compact': {
+    type: 'search-compact',
+    version: 1,
+    defaultSize: { width: 2, height: 1 },
+    minSize: { width: 1, height: 1 },
+    configuration: { provider: 'google', searchStyle: 'compact', openInNewTab: true, showEngineIcon: true },
+    render: SearchWidget
+  },
   bookmarks: {
     type: 'bookmarks',
     version: 1,
     defaultSize: { width: 3, height: 2 },
     minSize: { width: 1, height: 1 },
     configuration: { bookmarkStyle: 'tiles', iconSize: 'normal' },
+    render: BookmarksWidget
+  },
+  'bookmarks-icons': {
+    type: 'bookmarks-icons',
+    version: 1,
+    defaultSize: { width: 2, height: 2 },
+    minSize: { width: 1, height: 1 },
+    configuration: { bookmarkStyle: 'icons-only', iconSize: 'normal' },
+    render: BookmarksWidget
+  },
+  'bookmarks-dock': {
+    type: 'bookmarks-dock',
+    version: 1,
+    defaultSize: { width: 4, height: 1 },
+    minSize: { width: 1, height: 1 },
+    configuration: { bookmarkStyle: 'dock', iconSize: 'normal' },
     render: BookmarksWidget
   },
   notifications: {
@@ -510,10 +534,26 @@ export const widgetRegistry: Record<string, WidgetDefinition> = {
     configuration: { notificationStyle: 'cards', maxItems: 6 },
     render: NotificationsWidget
   },
+  'notifications-badge': {
+    type: 'notifications-badge',
+    version: 1,
+    defaultSize: { width: 1, height: 1 },
+    minSize: { width: 1, height: 1 },
+    configuration: { notificationStyle: 'badge-only' },
+    render: NotificationsWidget
+  },
+  'notifications-ticker': {
+    type: 'notifications-ticker',
+    version: 1,
+    defaultSize: { width: 3, height: 1 },
+    minSize: { width: 1, height: 1 },
+    configuration: { notificationStyle: 'compact-ticker' },
+    render: NotificationsWidget
+  },
   'homelab-performance': {
     type: 'homelab-performance',
     version: 1,
-    defaultSize: { width: 3, height: 2 },
+    defaultSize: { width: 2, height: 2 },
     minSize: { width: 1, height: 1 },
     configuration: {},
     render: PerformanceWidget

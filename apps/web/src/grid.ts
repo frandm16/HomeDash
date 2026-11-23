@@ -1,7 +1,7 @@
 import type { GridLayout, Widget } from './api'
 
-export const GRID_COLUMNS = 12
-export const GRID_ROWS = 12
+export const GRID_COLUMNS = 16
+export const GRID_ROWS = 16
 
 export function normalizeLayout(layout: GridLayout, minSize: { width: number; height: number }): GridLayout {
   const width = Math.max(minSize.width, Math.min(GRID_COLUMNS, Math.round(layout.width)))
@@ -57,6 +57,9 @@ export function moveWidget(widgets: Widget[], id: string, layout: GridLayout, mi
 export function findOpenLayout(layout: GridLayout, widgets: Widget[], ignoreId?: string): GridLayout {
   const candidate = normalizeLayout(layout, { width: 1, height: 1 })
   const occupied = widgets.filter(widget => widget.isEnabled && widget.id !== ignoreId).map(widget => widget.layout)
+  if (!occupied.some(item => overlaps(candidate, item))) {
+    return candidate
+  }
   return findFreeLayout(candidate, occupied, candidate.y) ?? { ...candidate, y: 0 }
 }
 

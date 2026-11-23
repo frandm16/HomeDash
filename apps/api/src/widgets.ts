@@ -11,11 +11,23 @@ export type WidgetDefinition = {
 }
 
 const definitions: WidgetDefinition[] = [
-  { type: 'search', version: 1, defaultConfiguration: { provider: 'google', openInNewTab: true }, minSize: { w: 1, h: 1 }, initialSize: { w: 4, h: 1 }, permissions: [] },
-  { type: 'service-status', version: 1, defaultConfiguration: {}, minSize: { w: 1, h: 1 }, initialSize: { w: 3, h: 2 }, permissions: ['service:read'], refreshIntervalMs: 30_000 },
-  { type: 'notifications', version: 1, defaultConfiguration: {}, minSize: { w: 1, h: 1 }, initialSize: { w: 3, h: 3 }, permissions: ['notification:read'], refreshIntervalMs: 30_000 },
-  { type: 'bookmarks', version: 1, defaultConfiguration: {}, minSize: { w: 1, h: 1 }, initialSize: { w: 4, h: 2 }, permissions: ['bookmark:read'] },
+  // Search
+  { type: 'search', version: 1, defaultConfiguration: { provider: 'google', searchStyle: 'pill', openInNewTab: true, showEngineIcon: true }, minSize: { w: 1, h: 1 }, initialSize: { w: 4, h: 1 }, permissions: [] },
+  { type: 'search-compact', version: 1, defaultConfiguration: { provider: 'google', searchStyle: 'compact', openInNewTab: true, showEngineIcon: true }, minSize: { w: 1, h: 1 }, initialSize: { w: 2, h: 1 }, permissions: [] },
+
+  // Bookmarks
+  { type: 'bookmarks', version: 1, defaultConfiguration: { bookmarkStyle: 'tiles', iconSize: 'normal' }, minSize: { w: 1, h: 1 }, initialSize: { w: 3, h: 2 }, permissions: ['bookmark:read'] },
+  { type: 'bookmarks-icons', version: 1, defaultConfiguration: { bookmarkStyle: 'icons-only', iconSize: 'normal' }, minSize: { w: 1, h: 1 }, initialSize: { w: 2, h: 2 }, permissions: ['bookmark:read'] },
+  { type: 'bookmarks-dock', version: 1, defaultConfiguration: { bookmarkStyle: 'dock', iconSize: 'normal' }, minSize: { w: 1, h: 1 }, initialSize: { w: 4, h: 1 }, permissions: ['bookmark:read'] },
+
+  // Notifications
+  { type: 'notifications', version: 1, defaultConfiguration: { notificationStyle: 'cards', maxItems: 6 }, minSize: { w: 1, h: 1 }, initialSize: { w: 3, h: 3 }, permissions: ['notification:read'], refreshIntervalMs: 30_000 },
+  { type: 'notifications-badge', version: 1, defaultConfiguration: { notificationStyle: 'badge-only' }, minSize: { w: 1, h: 1 }, initialSize: { w: 1, h: 1 }, permissions: ['notification:read'], refreshIntervalMs: 30_000 },
+  { type: 'notifications-ticker', version: 1, defaultConfiguration: { notificationStyle: 'compact-ticker' }, minSize: { w: 1, h: 1 }, initialSize: { w: 3, h: 1 }, permissions: ['notification:read'], refreshIntervalMs: 30_000 },
+
+  // System & Infrastructure
   { type: 'homelab-performance', version: 1, defaultConfiguration: {}, minSize: { w: 1, h: 1 }, initialSize: { w: 2, h: 2 }, permissions: ['metrics:read'], refreshIntervalMs: 15_000 },
+  { type: 'service-status', version: 1, defaultConfiguration: {}, minSize: { w: 1, h: 1 }, initialSize: { w: 3, h: 2 }, permissions: ['service:read'], refreshIntervalMs: 30_000 },
 ]
 
 export function listWidgetDefinitions(): WidgetDefinition[] { return definitions }

@@ -6,8 +6,8 @@ services:
       NODE_ENV: production
       HOST: 0.0.0.0
       PORT: 3000
-      DATABASE_URL: postgres://${POSTGRES_USER:-homedash}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-homedash}
-      CORS_ORIGIN: ${CORS_ORIGIN:?Set CORS_ORIGIN}
+      DATABASE_URL: postgres://${POSTGRES_USER:-homedash}:${POSTGRES_PASSWORD:-change-me}@postgres:5432/${POSTGRES_DB:-homedash}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5173}
       SESSION_TTL_DAYS: ${SESSION_TTL_DAYS:-30}
       BOOTSTRAP_USERNAME: ${BOOTSTRAP_USERNAME:-}
       BOOTSTRAP_PASSWORD: ${BOOTSTRAP_PASSWORD:-}
@@ -67,7 +67,9 @@ services:
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-homedash}
       POSTGRES_USER: ${POSTGRES_USER:-homedash}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+    ports:
+      - "127.0.0.1:5432:5432"
     volumes:
       - homedash-postgres-data:/var/lib/postgresql/data
     # PostgreSQL's official entrypoint must retain the permissions needed to

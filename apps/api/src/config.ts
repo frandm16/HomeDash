@@ -1,3 +1,17 @@
+import { existsSync } from 'node:fs'
+
+if (typeof process.loadEnvFile === 'function') {
+  try {
+    if (existsSync('.env')) {
+      process.loadEnvFile('.env')
+    } else if (existsSync('apps/api/.env')) {
+      process.loadEnvFile('apps/api/.env')
+    }
+  } catch {
+    // Ignore missing or unreadable env files
+  }
+}
+
 const asPort = (value: string | undefined): number => {
   const port = Number(value ?? 3000)
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('PORT must be an integer between 1 and 65535')

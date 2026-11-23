@@ -28,13 +28,13 @@ export async function verifyPassword(hash: string, password: string): Promise<bo
 }
 
 export async function ensureBootstrapUser(): Promise<void> {
-  const username = process.env.BOOTSTRAP_USERNAME
-  const password = process.env.BOOTSTRAP_PASSWORD
+  const username = process.env.BOOTSTRAP_USERNAME || (process.env.NODE_ENV === 'development' ? 'admin' : undefined)
+  const password = process.env.BOOTSTRAP_PASSWORD || (process.env.NODE_ENV === 'development' ? 'change-me' : undefined)
   if (!username || !password) return
   const existing = await pool.query('SELECT id FROM users LIMIT 1')
   if (existing.rowCount === 0) {
     await pool.query('INSERT INTO users (username, password_hash) VALUES ($1, $2)', [username, await hashPassword(password)])
-    console.log('Created initial HomeDash user from bootstrap configuration')
+    console.log(`Created initial HomeDash user '${username}' from bootstrap configuration`)
   }
 }
 

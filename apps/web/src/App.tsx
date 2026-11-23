@@ -1,23 +1,51 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent, PointerEvent, ReactNode } from 'react'
-import { createBookmark, createWidget, deleteBookmark, deleteWidget, fetchBookmarks, fetchDashboard, fetchPerformance, fetchProfiles, fetchWidgetDefinitions, fetchWidgets, getSession, login, logout, openEvents, updateBookmark, updateWidget, type AuthUser, type Bookmark, type DashboardProfile, type DashboardSnapshot, type PerformanceSnapshot, type Widget, type WidgetDefinition as ApiWidgetDefinition } from './api'
+import {
+  createBookmark,
+  createWidget,
+  deleteBookmark,
+  deleteWidget,
+  fetchBookmarks,
+  fetchDashboard,
+  fetchPerformance,
+  fetchProfiles,
+  fetchWidgetDefinitions,
+  fetchWidgets,
+  getSession,
+  login,
+  logout,
+  openEvents,
+  updateBookmark,
+  updateWidget,
+  type AuthUser,
+  type Bookmark,
+  type DashboardProfile,
+  type DashboardSnapshot,
+  type GridLayout,
+  type PerformanceSnapshot,
+  type Widget,
+  type WidgetDefinition as ApiWidgetDefinition
+} from './api'
 import { findOpenLayout, GRID_COLUMNS, GRID_ROWS, moveWidget } from './grid'
 import { widgetRegistry, type WidgetData, type WidgetRenderProps } from './widgets'
 import './App.css'
 
 type ToastState = 'saved' | 'saving' | 'error'
 type IconName = 'grid' | 'edit' | 'check' | 'plus' | 'search' | 'settings' | 'move' | 'resize' | 'remove' | 'close' | 'arrow' | 'bookmark' | 'bell' | 'activity' | 'logout' | 'gear'
+
 function Icon({ name, size = 16 }: { name: IconName; size?: number }) {
   const paths: Record<IconName, ReactNode> = {
     grid: <><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></>,
     edit: <><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L9 17l-4 1 1-4Z"/></>,
-    check: <path d="m5 12 4 4L19 6"/>, plus: <path d="M12 5v14M5 12h14"/>,
+    check: <path d="m5 12 4 4L19 6"/>,
+    plus: <path d="M12 5v14M5 12h14"/>,
     search: <><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></>,
     settings: <><circle cx="12" cy="12" r="3"/><path d="m19.4 15 .1.1 1.1.9-1.1 1.9-1.3-.5a8 8 0 0 1-1.6.9l-.2 1.4h-2.2l-.2-1.4a8 8 0 0 1-1.7-.9l-1.3.5-1.1-1.9 1.1-.9a7 7 0 0 1 0-1.9l-1.1-.9 1.1-1.9 1.3.5a8 8 0 0 1 1.7-.9l.2-1.4h2.2l.2 1.4a8 8 0 0 1 1.6.9l1.3-.5 1.1 1.9-1.1.9a7 7 0 0 1-.1 1.8Z"/></>,
     move: <><path d="M12 2v20M2 12h20M12 2l-3 3m3-3 3 3M12 22l-3-3m3 3 3-3M2 12l3-3m-3 3 3 3M22 12l-3-3m3 3-3 3"/></>,
     resize: <><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M3 16v3a2 2 0 0 0 2 2h3M21 16v3a2 2 0 0 1-2 2h-3"/></>,
     remove: <><path d="M3 6h18M8 6V4h8v2m3 0-1 14H6L5 6m4 4v6m6-6v6"/></>,
-    close: <path d="m18 6-12 12M6 6l12 12"/>, arrow: <><path d="M7 17 17 7M7 7h10v10"/></>,
+    close: <path d="m18 6-12 12M6 6l12 12"/>,
+    arrow: <><path d="M7 17 17 7M7 7h10v10"/></>,
     bookmark: <path d="M6 4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18l-6-4-6 4z"/>,
     bell: <><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21h4"/></>,
     activity: <path d="M3 12h4l3-9 4 18 3-9h4"/>,
@@ -28,20 +56,101 @@ function Icon({ name, size = 16 }: { name: IconName; size?: number }) {
 }
 
 function LoginScreen({ onAuthenticated }: { onAuthenticated: (user: AuthUser) => void }) {
-  const [username, setUsername] = useState(''); const [password, setPassword] = useState(''); const [error, setError] = useState(''); const [loading, setLoading] = useState(false)
-  async function submit(event: FormEvent) { event.preventDefault(); setError(''); setLoading(true); try { const result = await login(username, password); onAuthenticated(result.user) } catch { setError('Incorrect username or password.') } finally { setLoading(false) } }
-  return <main className="login-page"><form onSubmit={submit} className="login-card"><div className="brand-lockup"><span className="brand-symbol"><Icon name="grid" size={17}/></span><span>HOMEDASH<small>PRIVATE HOMELAB</small></span></div><p className="kicker">PRIVATE ACCESS</p><h1>Your homelab,<br/>in one place.</h1><p className="subtle">Sign in to open your dashboard.</p><label>Username<input autoComplete="username" value={username} onChange={event=>setUsername(event.target.value)} required/></label><label>Password<input type="password" autoComplete="current-password" value={password} onChange={event=>setPassword(event.target.value)} required/></label>{error&&<p className="form-error" role="alert">{error}</p>}<button className="button button-primary" disabled={loading}>{loading?'Checking…':'Sign in'}<Icon name="arrow" size={14}/></button></form></main>
+  const [username, setUsername] = useState('')
+  const [password, setPassword] = useState('')
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
+
+  async function submit(event: FormEvent) {
+    event.preventDefault()
+    setError('')
+    setLoading(true)
+    try {
+      const result = await login(username, password)
+      onAuthenticated(result.user)
+    } catch {
+      setError('Incorrect username or password.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <main className="login-page">
+      <form onSubmit={submit} className="login-card">
+        <div className="brand-lockup">
+          <span className="brand-symbol"><Icon name="grid" size={17}/></span>
+          <span>HOMEDASH<small>PRIVATE HOMELAB</small></span>
+        </div>
+        <p className="kicker">PRIVATE ACCESS</p>
+        <h1>Your homelab,<br/>in one place.</h1>
+        <p className="subtle">Sign in to open your dashboard.</p>
+        <label>Username
+          <input autoComplete="username" value={username} onChange={event => setUsername(event.target.value)} required/>
+        </label>
+        <label>Password
+          <input type="password" autoComplete="current-password" value={password} onChange={event => setPassword(event.target.value)} required/>
+        </label>
+        {error && <p className="form-error" role="alert">{error}</p>}
+        <button className="button button-primary" disabled={loading}>
+          {loading ? 'Checking…' : 'Sign in'}<Icon name="arrow" size={14}/>
+        </button>
+      </form>
+    </main>
+  )
 }
 
 function BookmarkDialog({ bookmark, profileId, onClose, onSaved }: { bookmark?: Bookmark; profileId: string; onClose: () => void; onSaved: (bookmark: Bookmark) => void }) {
-  const [name,setName]=useState(bookmark?.name??''); const [url,setUrl]=useState(bookmark?.url??''); const [error,setError]=useState('')
-  async function submit(event: FormEvent) { event.preventDefault(); try { const parsed=new URL(url); if(!['http:','https:'].includes(parsed.protocol)) throw new Error(); const result=bookmark?await updateBookmark(bookmark.id,{name,url}):await createBookmark(profileId,{name,url}); onSaved(result); onClose() } catch { setError('Enter a name and a valid http(s) URL.') } }
-  return <div className="overlay" role="presentation" onMouseDown={event=>{if(event.target===event.currentTarget)onClose()}}><form className="dialog" onSubmit={submit}><div className="dialog-heading"><div><p className="kicker">QUICK ACCESS</p><h2>{bookmark?'Edit bookmark':'Add bookmark'}</h2></div><button type="button" className="close-button" onClick={onClose} aria-label="Close"><Icon name="close"/></button></div><label>Name<input value={name} onChange={event=>setName(event.target.value)} required/></label><label>URL<input type="url" value={url} onChange={event=>setUrl(event.target.value)} required/></label>{error&&<p className="form-error">{error}</p>}<div className="dialog-actions"><button type="button" className="button button-quiet" onClick={onClose}>Cancel</button><button className="button button-primary">Save bookmark</button></div></form></div>
+  const [name, setName] = useState(bookmark?.name ?? '')
+  const [url, setUrl] = useState(bookmark?.url ?? '')
+  const [error, setError] = useState('')
+
+  async function submit(event: FormEvent) {
+    event.preventDefault()
+    try {
+      const parsed = new URL(url)
+      if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error()
+      const result = bookmark ? await updateBookmark(bookmark.id, { name, url }) : await createBookmark(profileId, { name, url })
+      onSaved(result)
+      onClose()
+    } catch {
+      setError('Enter a name and a valid http(s) URL.')
+    }
+  }
+
+  return (
+    <div className="overlay" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) onClose() }}>
+      <form className="dialog" onSubmit={submit}>
+        <div className="dialog-heading">
+          <div>
+            <p className="kicker">QUICK ACCESS</p>
+            <h2>{bookmark ? 'Edit bookmark' : 'Add bookmark'}</h2>
+          </div>
+          <button type="button" className="close-button" onClick={onClose} aria-label="Close"><Icon name="close"/></button>
+        </div>
+        <label>Name
+          <input value={name} onChange={event => setName(event.target.value)} required/>
+        </label>
+        <label>URL
+          <input type="url" value={url} onChange={event => setUrl(event.target.value)} required/>
+        </label>
+        {error && <p className="form-error">{error}</p>}
+        <div className="dialog-actions">
+          <button type="button" className="button button-quiet" onClick={onClose}>Cancel</button>
+          <button className="button button-primary">Save bookmark</button>
+        </div>
+      </form>
+    </div>
+  )
 }
 
 function WidgetSettings({ widget, onClose, onSave }: { widget: Widget; onClose: () => void; onSave: (configuration: Record<string, unknown>) => void }) {
   const [config, setConfig] = useState<Record<string, unknown>>({ ...widget.configuration })
   const type = widget.widgetType
+
+  const isSearch = type.startsWith('search')
+  const isBookmarks = type.startsWith('bookmarks')
+  const isNotifications = type.startsWith('notifications')
 
   return (
     <div className="overlay" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) onClose() }}>
@@ -54,7 +163,7 @@ function WidgetSettings({ widget, onClose, onSave }: { widget: Widget; onClose: 
           <button className="close-button" onClick={onClose} aria-label="Close"><Icon name="close"/></button>
         </div>
 
-        {type === 'search' && (
+        {isSearch && (
           <>
             <label>Search Provider
               <select value={String(config.provider ?? 'google')} onChange={e => setConfig(prev => ({ ...prev, provider: e.target.value }))}>
@@ -67,7 +176,7 @@ function WidgetSettings({ widget, onClose, onSave }: { widget: Widget; onClose: 
               </select>
             </label>
             <label>Visual Style
-              <select value={String(config.searchStyle ?? 'pill')} onChange={e => setConfig(prev => ({ ...prev, searchStyle: e.target.value }))}>
+              <select value={String(config.searchStyle ?? (type === 'search-compact' ? 'compact' : 'pill'))} onChange={e => setConfig(prev => ({ ...prev, searchStyle: e.target.value }))}>
                 <option value="pill">Pill (Floating Glass)</option>
                 <option value="minimal">Minimal (Clean Border)</option>
                 <option value="compact">Compact (Dense)</option>
@@ -85,10 +194,10 @@ function WidgetSettings({ widget, onClose, onSave }: { widget: Widget; onClose: 
           </>
         )}
 
-        {type === 'bookmarks' && (
+        {isBookmarks && (
           <>
             <label>Display Style
-              <select value={String(config.bookmarkStyle ?? 'tiles')} onChange={e => setConfig(prev => ({ ...prev, bookmarkStyle: e.target.value }))}>
+              <select value={String(config.bookmarkStyle ?? (type === 'bookmarks-icons' ? 'icons-only' : type === 'bookmarks-dock' ? 'dock' : 'tiles'))} onChange={e => setConfig(prev => ({ ...prev, bookmarkStyle: e.target.value }))}>
                 <option value="icons-only">Icons Only (No Text / App Launchpad)</option>
                 <option value="tiles">Cards / Tiles with Host</option>
                 <option value="compact-chips">Compact Chips</option>
@@ -104,10 +213,10 @@ function WidgetSettings({ widget, onClose, onSave }: { widget: Widget; onClose: 
           </>
         )}
 
-        {type === 'notifications' && (
+        {isNotifications && (
           <>
             <label>Notification Style
-              <select value={String(config.notificationStyle ?? 'cards')} onChange={e => setConfig(prev => ({ ...prev, notificationStyle: e.target.value }))}>
+              <select value={String(config.notificationStyle ?? (type === 'notifications-badge' ? 'badge-only' : type === 'notifications-ticker' ? 'compact-ticker' : 'cards'))} onChange={e => setConfig(prev => ({ ...prev, notificationStyle: e.target.value }))}>
                 <option value="cards">Glass Cards List</option>
                 <option value="timeline">Vertical Timeline</option>
                 <option value="compact-ticker">Compact Ticker (1-row)</option>
@@ -152,114 +261,859 @@ function WidgetSettings({ widget, onClose, onSave }: { widget: Widget; onClose: 
   )
 }
 
-function WidgetRenderer({definition,props}:{definition:(typeof widgetRegistry)[string];props:WidgetRenderProps}){const Widget=definition.render;return <Widget {...props}/>}
+function WidgetRenderer({ definition, props }: { definition: (typeof widgetRegistry)[string]; props: WidgetRenderProps }) {
+  const Widget = definition.render
+  return <Widget {...props} />
+}
 
 function Dashboard({ user, onLogout }: { user: AuthUser; onLogout: () => void }) {
-  const [snapshot,setSnapshot]=useState<DashboardSnapshot|null>(null); const [performance,setPerformance]=useState<PerformanceSnapshot|null>(null); const [bookmarks,setBookmarks]=useState<Bookmark[]>([]); const [widgets,setWidgets]=useState<Widget[]>([]); const [definitions,setDefinitions]=useState<ApiWidgetDefinition[]>([]); const [profile,setProfile]=useState<DashboardProfile|null>(null); const [editing,setEditing]=useState(false); const [showCatalog,setShowCatalog]=useState(false); const [bookmarkDialog,setBookmarkDialog]=useState<{bookmark?:Bookmark}|null>(null); const [settingsWidget,setSettingsWidget]=useState<Widget|null>(null); const [connection,setConnection]=useState<'loading'|'online'|'stale'|'offline'>('loading'); const [,setSaveState]=useState<ToastState>('saved'); const [menuOpen,setMenuOpen]=useState(false); const menuRef=useRef<HTMLDivElement|null>(null)
-  const saveTimer=useRef<number|undefined>(undefined); const saveQueue=useRef<Promise<unknown>>(Promise.resolve()); const gridRef=useRef<HTMLElement|null>(null); const dragRef=useRef<{id:string;pointerId:number;startX:number;startY:number;origin:Widget['layout'];moved:boolean;mode:'move'|'resize';edge?:string}|null>(null); const [draggingId,setDraggingId]=useState<string|null>(null); const [dropCell,setDropCell]=useState<{x:number;y:number;width:number;height:number}|null>(null)
-  const data:WidgetData={services:snapshot?.services??[],notifications:snapshot?.notifications??[],unreadNotifications:snapshot?.unreadNotifications??0,bookmarks,performance}; const enabledWidgets=useMemo(()=>widgets.filter(widget=>widget.isEnabled&&widgetRegistry[widget.widgetType]),[widgets])
-  useEffect(()=>{if(!menuOpen)return;const outside=(event:MouseEvent)=>{if(event.target instanceof Node&&!menuRef.current?.contains(event.target))setMenuOpen(false)};const key=(event:KeyboardEvent)=>{if(event.key==='Escape'){setMenuOpen(false);menuRef.current?.querySelector<HTMLButtonElement>('.gear-button')?.focus()}};document.addEventListener('mousedown',outside);document.addEventListener('keydown',key);return()=>{document.removeEventListener('mousedown',outside);document.removeEventListener('keydown',key)}},[menuOpen])
-  useEffect(()=>{const controller=new AbortController();Promise.all([fetchDashboard(controller.signal),fetchPerformance(controller.signal)]).then(([dash,metrics])=>{setSnapshot(dash);setPerformance(metrics);setConnection('online')}).catch(()=>setConnection('offline'));return()=>controller.abort()},[])
-  useEffect(()=>{let source:EventSource|undefined;let retry:number|undefined;let stopped=false;const connect=()=>{source=openEvents(event=>{try{if((JSON.parse(event.data) as {type:string}).type!=='heartbeat')fetchDashboard().then(setSnapshot).catch(()=>setConnection('stale'))}catch{/* Ignore invalid event payloads. */}},state=>{if(state==='connected')setConnection('online');else if(state==='reconnecting')setConnection('stale');else{setConnection('offline');if(!stopped)retry=window.setTimeout(connect,5000)}})};connect();return()=>{stopped=true;source?.close();if(retry)window.clearTimeout(retry)}},[])
-  useEffect(()=>{let cancelled=false;fetchProfiles().then(result=>{const chosen=result.profiles.find(item=>item.profileKey==='desktop')??result.profiles[0];if(chosen&&!cancelled)setProfile(chosen)}).catch(()=>undefined);fetchWidgetDefinitions().then(result=>{if(!cancelled)setDefinitions(result.widgets)}).catch(()=>undefined);return()=>{cancelled=true}},[])
-  useEffect(()=>{if(!profile)return;let cancelled=false;Promise.all([fetchWidgets(profile.id),fetchBookmarks(profile.id)]).then(async([result,bookmarkResult])=>{if(cancelled)return;setBookmarks(bookmarkResult.bookmarks);if(result.widgets.length){setWidgets(result.widgets);return}const available=await fetchWidgetDefinitions().catch(()=>({widgets:[] as ApiWidgetDefinition[]}));const initial=['search','bookmarks','notifications','homelab-performance'].flatMap(type=>{const definition=available.widgets.find(item=>item.type===type);return definition?[{definition,type}]:[]});let cursorX=0,cursorY=0,rowHeight=0;const created=await Promise.all(initial.map(({definition,type})=>{const width=Math.min(GRID_COLUMNS,definition.initialSize.w),height=definition.initialSize.h;if(cursorX+width>GRID_COLUMNS){cursorX=0;cursorY+=rowHeight;rowHeight=0}const layout={x:cursorX,y:cursorY,width,height};cursorX+=width;rowHeight=Math.max(rowHeight,height);return createWidget(profile.id,type,definition.defaultConfiguration,layout).catch(()=>null)}));if(!cancelled)setWidgets(created.filter((widget):widget is Widget=>widget!==null))}).catch(()=>undefined);return()=>{cancelled=true}},[profile])
-  const saveWidgets=(next:Widget[])=>{setWidgets(next);setSaveState('saving');if(saveTimer.current)window.clearTimeout(saveTimer.current);saveTimer.current=window.setTimeout(()=>{const persist=()=>Promise.all(next.map(widget=>updateWidget(widget.id,{layout:widget.layout,configuration:widget.configuration})));saveQueue.current=saveQueue.current.then(persist,persist).then(saved=>{setWidgets(current=>current.map(widget=>{const response=saved.find(item=>item.id===widget.id),sent=next.find(item=>item.id===widget.id);return response&&sent&&JSON.stringify(widget.layout)===JSON.stringify(sent.layout)&&JSON.stringify(widget.configuration)===JSON.stringify(sent.configuration)?{...widget,updatedAt:response.updatedAt}:widget}));setSaveState('saved')}).catch(()=>setSaveState('error'))},450)}
-  const addWidget=async(definition:ApiWidgetDefinition)=>{if(!profile)return;const width=Math.min(GRID_COLUMNS,definition.initialSize.w),height=definition.initialSize.h;const layout=findOpenLayout({x:0,y:0,width,height},widgets);try{const created=await createWidget(profile.id,definition.type,definition.defaultConfiguration,layout);setWidgets(current=>[...current,created]);setShowCatalog(false)}catch{setSaveState('error')}}
-  const removeWidget=async(widget:Widget)=>{try{await deleteWidget(widget.id);setWidgets(current=>current.filter(item=>item.id!==widget.id))}catch{setSaveState('error')}}
-  const updateConfiguration=(widget:Widget,configuration:Record<string,unknown>)=>{setSettingsWidget(null);saveWidgets(widgets.map(item=>item.id===widget.id?{...item,configuration}:item))}
-  const removeBookmark=async(bookmark:Bookmark)=>{try{await deleteBookmark(bookmark.id);setBookmarks(current=>current.filter(item=>item.id!==bookmark.id))}catch{setSaveState('error')}}
-  const bookmarkSaved=(saved:Bookmark)=>setBookmarks(current=>bookmarkDialog?.bookmark?current.map(item=>item.id===saved.id?saved:item):[...current,saved])
-  const getCell=(clientX:number,clientY:number)=>{
-    const grid=gridRef.current;if(!grid)return null;
-    const rect=grid.getBoundingClientRect(),style=getComputedStyle(grid);
-    const gapX=parseFloat(style.columnGap)||0,gapY=parseFloat(style.rowGap)||0;
-    const isMobile=window.innerWidth<=720;
-    const displayedColumns=window.innerWidth<=420?2:window.innerWidth<=720?4:GRID_COLUMNS;
-    const displayedRows=isMobile?12:GRID_ROWS;
-    const cellWidth=(rect.width-parseFloat(style.paddingLeft)-parseFloat(style.paddingRight)-gapX*(displayedColumns-1))/displayedColumns;
-    const cellHeight=(rect.height-parseFloat(style.paddingTop)-parseFloat(style.paddingBottom)-gapY*(displayedRows-1))/displayedRows;
-    return{
-      x:Math.max(0,Math.min(displayedColumns-1,Math.floor((clientX-rect.left)/(cellWidth+gapX)))),
-      y:Math.max(0,Math.min(displayedRows-1,Math.floor((clientY-rect.top)/(cellHeight+gapY))))
+  const [snapshot, setSnapshot] = useState<DashboardSnapshot | null>(null)
+  const [performance, setPerformance] = useState<PerformanceSnapshot | null>(null)
+  const [bookmarks, setBookmarks] = useState<Bookmark[]>([])
+  const [widgets, setWidgets] = useState<Widget[]>([])
+  const [definitions, setDefinitions] = useState<ApiWidgetDefinition[]>([])
+  const [profile, setProfile] = useState<DashboardProfile | null>(null)
+  const [editing, setEditing] = useState(false)
+  const [showCatalog, setShowCatalog] = useState(false)
+  const [selectedSlot, setSelectedSlot] = useState<{ x: number; y: number } | null>(null)
+  const [bookmarkDialog, setBookmarkDialog] = useState<{ bookmark?: Bookmark } | null>(null)
+  const [settingsWidget, setSettingsWidget] = useState<Widget | null>(null)
+  const [connection, setConnection] = useState<'loading' | 'online' | 'stale' | 'offline'>('loading')
+  const [, setSaveState] = useState<ToastState>('saved')
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null)
+  const [menuOpen, setMenuOpen] = useState(false)
+  const menuRef = useRef<HTMLDivElement | null>(null)
+
+  const saveTimer = useRef<number | undefined>(undefined)
+  const saveQueue = useRef<Promise<unknown>>(Promise.resolve())
+  const gridRef = useRef<HTMLElement | null>(null)
+  const dragRef = useRef<{ id: string; pointerId: number; startX: number; startY: number; origin: Widget['layout']; moved: boolean; mode: 'move' | 'resize'; edge?: string } | null>(null)
+  const [draggingId, setDraggingId] = useState<string | null>(null)
+  const [dropCell, setDropCell] = useState<{ x: number; y: number; width: number; height: number } | null>(null)
+
+  const data: WidgetData = {
+    services: snapshot?.services ?? [],
+    notifications: snapshot?.notifications ?? [],
+    unreadNotifications: snapshot?.unreadNotifications ?? 0,
+    bookmarks,
+    performance
+  }
+
+  const enabledWidgets = useMemo(() => widgets.filter(widget => widget.isEnabled && widgetRegistry[widget.widgetType]), [widgets])
+
+  // Compute occupied grid cells for generating empty "+" slots in edit mode
+  const occupiedCells = useMemo(() => {
+    const set = new Set<string>()
+    for (const widget of enabledWidgets) {
+      for (let x = widget.layout.x; x < widget.layout.x + widget.layout.width; x++) {
+        for (let y = widget.layout.y; y < widget.layout.y + widget.layout.height; y++) {
+          set.add(`${x},${y}`)
+        }
+      }
+    }
+    return set
+  }, [enabledWidgets])
+
+  const emptySlots = useMemo(() => {
+    if (!editing) return []
+    const isMobile = typeof window !== 'undefined' && window.innerWidth <= 720
+    if (isMobile) return []
+    const slots: { x: number; y: number }[] = []
+    for (let y = 0; y < GRID_ROWS; y++) {
+      for (let x = 0; x < GRID_COLUMNS; x++) {
+        if (!occupiedCells.has(`${x},${y}`)) {
+          slots.push({ x, y })
+        }
+      }
+    }
+    return slots
+  }, [editing, occupiedCells])
+
+  // Keyboard shortcuts (E to toggle edit mode, Esc to exit or close menus)
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const tag = (event.target as HTMLElement)?.tagName?.toLowerCase()
+      if (tag === 'input' || tag === 'textarea' || tag === 'select') return
+
+      if (event.key.toLowerCase() === 'e' && !event.ctrlKey && !event.metaKey && !event.altKey) {
+        event.preventDefault()
+        setEditing(v => !v)
+        setContextMenu(null)
+      } else if (event.key === 'Escape') {
+        if (contextMenu) setContextMenu(null)
+        if (menuOpen) setMenuOpen(false)
+        if (editing) setEditing(false)
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [contextMenu, menuOpen, editing])
+
+  // Close context menu on outside click
+  useEffect(() => {
+    if (!contextMenu) return
+    const close = () => setContextMenu(null)
+    window.addEventListener('click', close)
+    return () => window.removeEventListener('click', close)
+  }, [contextMenu])
+
+  useEffect(() => {
+    if (!menuOpen) return
+    const outside = (event: MouseEvent) => {
+      if (event.target instanceof Node && !menuRef.current?.contains(event.target)) setMenuOpen(false)
+    }
+    document.addEventListener('mousedown', outside)
+    return () => document.removeEventListener('mousedown', outside)
+  }, [menuOpen])
+
+  useEffect(() => {
+    const controller = new AbortController()
+    Promise.all([fetchDashboard(controller.signal), fetchPerformance(controller.signal)])
+      .then(([dash, metrics]) => {
+        setSnapshot(dash)
+        setPerformance(metrics)
+        setConnection('online')
+      })
+      .catch(() => setConnection('offline'))
+    return () => controller.abort()
+  }, [])
+
+  useEffect(() => {
+    let source: EventSource | undefined
+    let retry: number | undefined
+    let stopped = false
+    const connect = () => {
+      source = openEvents(event => {
+        try {
+          if ((JSON.parse(event.data) as { type: string }).type !== 'heartbeat') {
+            fetchDashboard().then(setSnapshot).catch(() => setConnection('stale'))
+          }
+        } catch {
+          /* Ignore invalid event payloads. */
+        }
+      }, state => {
+        if (state === 'connected') setConnection('online')
+        else if (state === 'reconnecting') setConnection('stale')
+        else {
+          setConnection('offline')
+          if (!stopped) retry = window.setTimeout(connect, 5000)
+        }
+      })
+    }
+    connect()
+    return () => {
+      stopped = true
+      source?.close()
+      if (retry) window.clearTimeout(retry)
+    }
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    fetchProfiles().then(result => {
+      const chosen = result.profiles.find(item => item.profileKey === 'desktop') ?? result.profiles[0]
+      if (chosen && !cancelled) setProfile(chosen)
+    }).catch(() => undefined)
+    fetchWidgetDefinitions().then(result => {
+      if (!cancelled) setDefinitions(result.widgets)
+    }).catch(() => undefined)
+    return () => { cancelled = true }
+  }, [])
+
+  useEffect(() => {
+    if (!profile) return
+    let cancelled = false
+    Promise.all([fetchWidgets(profile.id), fetchBookmarks(profile.id)]).then(async ([result, bookmarkResult]) => {
+      if (cancelled) return
+      setBookmarks(bookmarkResult.bookmarks)
+      if (result.widgets.length) {
+        setWidgets(result.widgets)
+        return
+      }
+      const available = await fetchWidgetDefinitions().catch(() => ({ widgets: [] as ApiWidgetDefinition[] }))
+      const initial = ['search', 'bookmarks', 'notifications', 'homelab-performance'].flatMap(type => {
+        const definition = available.widgets.find(item => item.type === type)
+        return definition ? [{ definition, type }] : []
+      })
+      let cursorX = 0, cursorY = 0, rowHeight = 0
+      const created = await Promise.all(initial.map(({ definition, type }) => {
+        const width = Math.min(GRID_COLUMNS, definition.initialSize.w), height = definition.initialSize.h
+        if (cursorX + width > GRID_COLUMNS) {
+          cursorX = 0
+          cursorY += rowHeight
+          rowHeight = 0
+        }
+        const layout = { x: cursorX, y: cursorY, width, height }
+        cursorX += width
+        rowHeight = Math.max(rowHeight, height)
+        return createWidget(profile.id, type, definition.defaultConfiguration, layout).catch(() => null)
+      }))
+      if (!cancelled) setWidgets(created.filter((widget): widget is Widget => widget !== null))
+    }).catch(() => undefined)
+    return () => { cancelled = true }
+  }, [profile])
+
+  const saveWidgets = (next: Widget[]) => {
+    setWidgets(next)
+    setSaveState('saving')
+    if (saveTimer.current) window.clearTimeout(saveTimer.current)
+    saveTimer.current = window.setTimeout(() => {
+      const persist = () => Promise.all(next.map(widget => updateWidget(widget.id, { layout: widget.layout, configuration: widget.configuration })))
+      saveQueue.current = saveQueue.current.then(persist, persist).then(saved => {
+        setWidgets(current => current.map(widget => {
+          const response = saved.find(item => item.id === widget.id)
+          const sent = next.find(item => item.id === widget.id)
+          return response && sent && JSON.stringify(widget.layout) === JSON.stringify(sent.layout) && JSON.stringify(widget.configuration) === JSON.stringify(sent.configuration) ? { ...widget, updatedAt: response.updatedAt } : widget
+        }))
+        setSaveState('saved')
+      }).catch(() => setSaveState('error'))
+    }, 450)
+  }
+
+  const addWidget = async (definition: ApiWidgetDefinition) => {
+    if (!profile) return
+    const width = Math.min(GRID_COLUMNS, definition.initialSize.w)
+    const height = Math.min(GRID_ROWS, definition.initialSize.h)
+
+    let layout: GridLayout
+    if (selectedSlot) {
+      const targetX = Math.max(0, Math.min(GRID_COLUMNS - width, selectedSlot.x))
+      const targetY = Math.max(0, Math.min(GRID_ROWS - height, selectedSlot.y))
+      layout = findOpenLayout({ x: targetX, y: targetY, width, height }, widgets)
+    } else {
+      layout = findOpenLayout({ x: 0, y: 0, width, height }, widgets)
+    }
+
+    try {
+      const created = await createWidget(profile.id, definition.type, definition.defaultConfiguration, layout)
+      setWidgets(current => [...current, created])
+      setShowCatalog(false)
+      setSelectedSlot(null)
+    } catch {
+      setSaveState('error')
     }
   }
-  const onDragStart=(event:PointerEvent,widget:Widget,mode:'move'|'resize'='move',edge?:string)=>{
-    if(!editing)return;event.preventDefault();event.stopPropagation();
-    (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
-    dragRef.current={id:widget.id,pointerId:event.pointerId,startX:event.clientX,startY:event.clientY,origin:widget.layout,moved:false,mode,edge};
-    setDraggingId(widget.id);setDropCell({...widget.layout})
+
+  const removeWidget = async (widget: Widget) => {
+    try {
+      setWidgets(current => current.filter(item => item.id !== widget.id))
+      await deleteWidget(widget.id)
+    } catch {
+      setSaveState('error')
+    }
   }
-  const onDragMove=(event:PointerEvent)=>{
-    const drag=dragRef.current;if(!drag||drag.pointerId!==event.pointerId)return;
-    const cell=getCell(event.clientX,event.clientY);
-    if(cell){
-      const widget=widgets.find(item=>item.id===drag.id);if(!widget)return;
-      const isMobile=window.innerWidth<=720;
-      const columns=window.innerWidth<=420?2:window.innerWidth<=720?4:GRID_COLUMNS;
-      const rows=isMobile?12:GRID_ROWS;
-      const grid=gridRef.current,rect=grid?.getBoundingClientRect(),style=grid?getComputedStyle(grid):null;
-      const gapX=style?parseFloat(style.columnGap)||0:0,gapY=style?parseFloat(style.rowGap)||0:0;
-      const padX=style?(parseFloat(style.paddingLeft)||0)+(parseFloat(style.paddingRight)||0):0;
-      const padY=style?(parseFloat(style.paddingTop)||0)+(parseFloat(style.paddingBottom)||0):0;
-      const cellWidth=rect?(rect.width-padX-gapX*(columns-1))/columns:1;
-      const cellHeight=rect?(rect.height-padY-gapY*(rows-1))/rows:1;
-      const min=widgetRegistry[widget.widgetType]?.minSize??{width:1,height:1};
-      if(drag.mode==='move'){
+
+  const updateConfiguration = (widget: Widget, configuration: Record<string, unknown>) => {
+    setSettingsWidget(null)
+    saveWidgets(widgets.map(item => item.id === widget.id ? { ...item, configuration } : item))
+  }
+
+  const removeBookmark = async (bookmark: Bookmark) => {
+    try {
+      await deleteBookmark(bookmark.id)
+      setBookmarks(current => current.filter(item => item.id !== bookmark.id))
+    } catch {
+      setSaveState('error')
+    }
+  }
+
+  const bookmarkSaved = (saved: Bookmark) => setBookmarks(current => bookmarkDialog?.bookmark ? current.map(item => item.id === saved.id ? saved : item) : [...current, saved])
+
+  const getCell = (clientX: number, clientY: number) => {
+    const grid = gridRef.current
+    if (!grid) return null
+    const rect = grid.getBoundingClientRect()
+    const style = getComputedStyle(grid)
+    const gapX = parseFloat(style.columnGap) || 0
+    const gapY = parseFloat(style.rowGap) || 0
+    const isMobile = window.innerWidth <= 720
+    const displayedColumns = window.innerWidth <= 420 ? 2 : window.innerWidth <= 720 ? 4 : GRID_COLUMNS
+    const displayedRows = isMobile ? 12 : GRID_ROWS
+    const cellWidth = (rect.width - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight) - gapX * (displayedColumns - 1)) / displayedColumns
+    const cellHeight = (rect.height - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom) - gapY * (displayedRows - 1)) / displayedRows
+    return {
+      x: Math.max(0, Math.min(displayedColumns - 1, Math.floor((clientX - rect.left) / (cellWidth + gapX)))),
+      y: Math.max(0, Math.min(displayedRows - 1, Math.floor((clientY - rect.top) / (cellHeight + gapY))))
+    }
+  }
+
+  const onDragStart = (event: PointerEvent, widget: Widget, mode: 'move' | 'resize' = 'move', edge?: string) => {
+    if (!editing) return
+    event.preventDefault()
+    event.stopPropagation()
+    ;(event.currentTarget as HTMLElement).setPointerCapture(event.pointerId)
+    dragRef.current = { id: widget.id, pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, origin: widget.layout, moved: false, mode, edge }
+    setDraggingId(widget.id)
+    setDropCell({ ...widget.layout })
+  }
+
+  const onDragMove = (event: PointerEvent) => {
+    const drag = dragRef.current
+    if (!drag || drag.pointerId !== event.pointerId) return
+    const cell = getCell(event.clientX, event.clientY)
+    if (cell) {
+      const widget = widgets.find(item => item.id === drag.id)
+      if (!widget) return
+      const isMobile = window.innerWidth <= 720
+      const columns = window.innerWidth <= 420 ? 2 : window.innerWidth <= 720 ? 4 : GRID_COLUMNS
+      const rows = isMobile ? 12 : GRID_ROWS
+      const grid = gridRef.current, rect = grid?.getBoundingClientRect(), style = grid ? getComputedStyle(grid) : null
+      const gapX = style ? parseFloat(style.columnGap) || 0 : 0, gapY = style ? parseFloat(style.rowGap) || 0 : 0
+      const padX = style ? (parseFloat(style.paddingLeft) || 0) + (parseFloat(style.paddingRight) || 0) : 0
+      const padY = style ? (parseFloat(style.paddingTop) || 0) + (parseFloat(style.paddingBottom) || 0) : 0
+      const cellWidth = rect ? (rect.width - padX - gapX * (columns - 1)) / columns : 1
+      const cellHeight = rect ? (rect.height - padY - gapY * (rows - 1)) / rows : 1
+      const min = widgetRegistry[widget.widgetType]?.minSize ?? { width: 1, height: 1 }
+
+      if (drag.mode === 'move') {
         setDropCell({
           ...drag.origin,
-          x:Math.max(0,Math.min(columns-drag.origin.width,cell.x)),
-          y:Math.max(0,Math.min(rows-drag.origin.height,cell.y))
+          x: Math.max(0, Math.min(columns - drag.origin.width, cell.x)),
+          y: Math.max(0, Math.min(rows - drag.origin.height, cell.y))
         })
-      }else{
-        const dx=Math.round((event.clientX-drag.startX)/cellWidth);
-        const dy=Math.round((event.clientY-drag.startY)/cellHeight);
-        const edge=drag.edge??'se';
-        let{x,y,width,height}=drag.origin;
-        if(edge.includes('e'))width=Math.max(min.width,Math.min(columns-x,width+dx));
-        if(edge.includes('s'))height=Math.max(min.height,Math.min(rows-y,height+dy));
-        if(edge.includes('w')){
-          const nextWidth=Math.max(min.width,Math.min(width-dx,drag.origin.x+drag.origin.width));
-          x=drag.origin.x+drag.origin.width-nextWidth;
-          width=nextWidth;
+      } else {
+        const dx = Math.round((event.clientX - drag.startX) / cellWidth)
+        const dy = Math.round((event.clientY - drag.startY) / cellHeight)
+        const edge = drag.edge ?? 'se'
+        let { x, y, width, height } = drag.origin
+        if (edge.includes('e')) width = Math.max(min.width, Math.min(columns - x, width + dx))
+        if (edge.includes('s')) height = Math.max(min.height, Math.min(rows - y, height + dy))
+        if (edge.includes('w')) {
+          const nextWidth = Math.max(min.width, Math.min(width - dx, drag.origin.x + drag.origin.width))
+          x = drag.origin.x + drag.origin.width - nextWidth
+          width = nextWidth
         }
-        if(edge.includes('n')){
-          const nextHeight=Math.max(min.height,Math.min(height-dy,drag.origin.y+drag.origin.height));
-          y=drag.origin.y+drag.origin.height-nextHeight;
-          height=nextHeight;
+        if (edge.includes('n')) {
+          const nextHeight = Math.max(min.height, Math.min(height - dy, drag.origin.y + drag.origin.height))
+          y = drag.origin.y + drag.origin.height - nextHeight
+          height = nextHeight
         }
-        setDropCell({x,y,width,height})
+        setDropCell({ x, y, width, height })
       }
-      if(Math.abs(event.clientX-drag.startX)+Math.abs(event.clientY-drag.startY)>5)drag.moved=true;
+      if (Math.abs(event.clientX - drag.startX) + Math.abs(event.clientY - drag.startY) > 5) drag.moved = true
     }
   }
-  const onDragEnd=(event:PointerEvent)=>{
-    const drag=dragRef.current;if(!drag||drag.pointerId!==event.pointerId)return;
-    dragRef.current=null;setDraggingId(null);setDropCell(null);
-    if(!drag.moved)return;
-    const widget=widgets.find(item=>item.id===drag.id);if(!widget)return;
-    const isMobile=window.innerWidth<=720;
-    const columns=window.innerWidth<=420?2:window.innerWidth<=720?4:GRID_COLUMNS;
-    const rows=isMobile?12:GRID_ROWS;
-    const target=drag.mode==='resize'?dropCell:((cell)=>cell?{
+
+  const onDragEnd = (event: PointerEvent) => {
+    const drag = dragRef.current
+    if (!drag || drag.pointerId !== event.pointerId) return
+    dragRef.current = null
+    setDraggingId(null)
+    setDropCell(null)
+    if (!drag.moved) return
+    const widget = widgets.find(item => item.id === drag.id)
+    if (!widget) return
+    const isMobile = window.innerWidth <= 720
+    const columns = window.innerWidth <= 420 ? 2 : window.innerWidth <= 720 ? 4 : GRID_COLUMNS
+    const rows = isMobile ? 12 : GRID_ROWS
+    const target = drag.mode === 'resize' ? dropCell : ((cell) => cell ? {
       ...drag.origin,
-      x:Math.min(columns-drag.origin.width,cell.x),
-      y:Math.min(rows-drag.origin.height,cell.y)
-    }:null)(getCell(event.clientX,event.clientY));
-    if(!target)return;
-    const definition=widgetRegistry[widget.widgetType];
-    const result=moveWidget(widgets,widget.id,target,definition?.minSize??{width:1,height:1});
+      x: Math.min(columns - drag.origin.width, cell.x),
+      y: Math.min(rows - drag.origin.height, cell.y)
+    } : null)(getCell(event.clientX, event.clientY))
+    if (!target) return
+    const definition = widgetRegistry[widget.widgetType]
+    const result = moveWidget(widgets, widget.id, target, definition?.minSize ?? { width: 1, height: 1 })
     saveWidgets(result)
   }
-  return <main className="app-frame"><div className="corner-menu" ref={menuRef}><button className="gear-button" aria-label="Open dashboard menu" aria-haspopup="menu" aria-expanded={menuOpen} onClick={()=>setMenuOpen(value=>!value)}><Icon name="gear" size={19}/></button>{menuOpen&&<div className="gear-dropdown" role="menu"><div className="menu-user">{user.username}</div><button role="menuitem" onClick={()=>{setEditing(value=>!value);setMenuOpen(false)}}><Icon name={editing?'check':'edit'} size={15}/>{editing?'Done editing':'Edit dashboard'}</button><button role="menuitem" onClick={()=>{setMenuOpen(false);onLogout()}}><Icon name="logout" size={15}/>Log out</button></div>}</div>
-    {!enabledWidgets.length?<section className="widget-grid empty-dashboard" aria-label="Dashboard widgets"><p>Your canvas is empty.</p><button className="button button-primary" onClick={()=>{setEditing(true);setShowCatalog(true)}}>Add widget</button></section>:<section ref={gridRef} className={`widget-grid ${editing?'editing':''}`} aria-label="Dashboard widgets">{enabledWidgets.map(widget=>{const definition=widgetRegistry[widget.widgetType];const hasRedirect=Boolean(widget.configuration.redirectUrl)&&!editing;const props={data,state:connection==='offline'?'offline' as const:connection==='stale'?'stale' as const:snapshot?'ready' as const:'loading' as const,message:snapshot?.sourceStates?.notifications,editing,configuration:widget.configuration,onConfigurationChange:(configuration:Record<string,unknown>)=>updateConfiguration(widget,configuration),onBookmarkChange:()=>setBookmarkDialog({}),onBookmarkDelete:removeBookmark,onBookmarkEdit:(bookmark:Bookmark)=>setBookmarkDialog({bookmark})};return <article key={widget.id} className={`widget-shell ${editing?'is-editing':''} ${draggingId===widget.id?'is-dragging':''} ${hasRedirect?'has-redirect':''}`} style={{gridColumn:`${widget.layout.x+1}/span ${widget.layout.width}`,gridRow:`${widget.layout.y+1}/span ${widget.layout.height}`}} onClick={(event)=>{if(editing)return;const target=event.target as HTMLElement;if(target.closest('a, button, input, select, textarea, [role="button"], .resize-handle, .widget-toolbar'))return;const url=String(widget.configuration.redirectUrl??'').trim();if(!url)return;const inNewTab=widget.configuration.redirectNewTab!==false;try{const parsed=new URL(url);if(['http:','https:'].includes(parsed.protocol)){window.open(url,inNewTab?'_blank':'_self','noopener,noreferrer')}}catch{if(url.startsWith('/'))window.location.href=url}}}>{editing&&<div className="widget-toolbar"><button className="drag-handle" aria-label={`Move ${definition?.type??'widget'}`} title="Drag to move" onPointerDown={event=>onDragStart(event,widget)} onPointerMove={onDragMove} onPointerUp={onDragEnd} onPointerCancel={onDragEnd}><Icon name="move" size={13}/></button><strong>{definition?.type.replaceAll('-',' ')}</strong><div className="widget-toolbar-actions"><button onClick={()=>setSettingsWidget(widget)} aria-label="Widget settings" title="Settings"><Icon name="settings" size={14}/></button><button className="remove-widget" onClick={()=>void removeWidget(widget)} aria-label="Remove widget" title="Remove"><Icon name="remove" size={13}/></button></div></div>}{definition&&<WidgetRenderer definition={definition} props={props}/>}{hasRedirect&&<span className="redirect-hint-arrow" aria-hidden="true" title={`Redirects to ${widget.configuration.redirectUrl}`}>↗</span>}{editing&&['n','s','e','w','ne','nw','se','sw'].map(edge=><span key={edge} className={`resize-handle resize-${edge}`} role="separator" aria-label={`Resize ${definition?.type??'widget'} ${edge}`} onPointerDown={event=>onDragStart(event,widget,'resize',edge)} onPointerMove={onDragMove} onPointerUp={onDragEnd} onPointerCancel={onDragEnd}/>)}</article>})}{dropCell&&draggingId&&<div className="drop-indicator" style={{gridColumn:`${dropCell.x+1}/span ${dropCell.width}`,gridRow:`${dropCell.y+1}/span ${dropCell.height}`}}/>}</section>}
-    {showCatalog&&<WidgetCatalog definitions={definitions} widgets={widgets} onClose={()=>setShowCatalog(false)} onAdd={addWidget}/>} {bookmarkDialog&&profile&&<BookmarkDialog profileId={profile.id} bookmark={bookmarkDialog.bookmark} onClose={()=>setBookmarkDialog(null)} onSaved={bookmarkSaved}/>} {settingsWidget&&<WidgetSettings widget={settingsWidget} onClose={()=>setSettingsWidget(null)} onSave={configuration=>updateConfiguration(settingsWidget,configuration)}/>}
-  </main>
+
+  const onCanvasContextMenu = (event: React.MouseEvent) => {
+    const target = event.target as HTMLElement
+    if (target.closest('input, textarea, a, select, button, .widget-toolbar, .resize-handle')) return
+    event.preventDefault()
+    setContextMenu({ x: event.clientX, y: event.clientY })
+  }
+
+  const onCanvasDoubleClick = (event: React.MouseEvent) => {
+    const target = event.target as HTMLElement
+    if (target.closest('input, textarea, a, select, button, .widget-toolbar, .resize-handle')) return
+    setEditing(prev => !prev)
+  }
+
+  return (
+    <main
+      className="app-frame"
+      onContextMenu={onCanvasContextMenu}
+      onDoubleClick={onCanvasDoubleClick}
+    >
+      {/* Invisible auto-revealing menu trigger at top-right (no permanent gear icon) */}
+      <div className="corner-hotzone" ref={menuRef}>
+        <button
+          className="corner-trigger-btn"
+          aria-label="Dashboard menu"
+          aria-expanded={menuOpen}
+          onClick={() => setMenuOpen(v => !v)}
+        >
+          <span>Menu</span>
+          <Icon name="arrow" size={12}/>
+        </button>
+        {menuOpen && (
+          <div className="gear-dropdown" role="menu">
+            <div className="menu-user">{user.username}</div>
+            <button role="menuitem" onClick={() => { setEditing(v => !v); setMenuOpen(false) }}>
+              <Icon name={editing ? 'check' : 'edit'} size={15}/>
+              {editing ? 'Done editing (E)' : 'Edit dashboard (E)'}
+            </button>
+            <button role="menuitem" onClick={() => { setSelectedSlot(null); setShowCatalog(true); setMenuOpen(false) }}>
+              <Icon name="plus" size={15}/>
+              Add widget
+            </button>
+            <button role="menuitem" onClick={() => { setMenuOpen(false); onLogout() }}>
+              <Icon name="logout" size={15}/>
+              Log out
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Right-click canvas context menu */}
+      {contextMenu && (
+        <div
+          className="canvas-context-menu"
+          style={{ top: contextMenu.y, left: Math.min(window.innerWidth - 220, contextMenu.x) }}
+          role="menu"
+          onClick={e => e.stopPropagation()}
+        >
+          <div className="menu-header">Dashboard</div>
+          <button role="menuitem" onClick={() => { setEditing(v => !v); setContextMenu(null) }}>
+            <Icon name={editing ? 'check' : 'edit'} size={15}/>
+            {editing ? 'Done editing' : 'Edit dashboard'}
+          </button>
+          <button role="menuitem" onClick={() => { setSelectedSlot(null); setShowCatalog(true); setContextMenu(null) }}>
+            <Icon name="plus" size={15}/>
+            Add widget
+          </button>
+          <div className="context-menu-divider"/>
+          <button role="menuitem" className="logout-item" onClick={() => { setContextMenu(null); onLogout() }}>
+            <Icon name="logout" size={15}/>
+            Log out
+          </button>
+        </div>
+      )}
+
+      {/* Floating dock control bar when editing */}
+      {editing && (
+        <aside className="edit-dock-bar">
+          <div className="edit-dock-badge">
+            <span className="edit-pulse-dot"/>
+            Editing Mode
+          </div>
+          <button
+            type="button"
+            className="button button-add"
+            onClick={() => { setSelectedSlot(null); setShowCatalog(true) }}
+          >
+            <Icon name="plus" size={14}/> Add widget
+          </button>
+          <button
+            type="button"
+            className="button button-primary"
+            onClick={() => setEditing(false)}
+            title="Exit edit mode (Esc or E)"
+          >
+            <Icon name="check" size={14}/> Done
+          </button>
+          <button
+            type="button"
+            className="button button-quiet"
+            onClick={onLogout}
+            title="Log out"
+          >
+            <Icon name="logout" size={14}/>
+          </button>
+        </aside>
+      )}
+
+      {!enabledWidgets.length && !editing ? (
+        <section className="widget-grid empty-dashboard" style={{ '--grid-cols': GRID_COLUMNS, '--grid-rows': GRID_ROWS } as React.CSSProperties} aria-label="Dashboard widgets">
+          <p>Your canvas is empty.</p>
+          <button className="button button-primary" onClick={() => { setEditing(true); setShowCatalog(true) }}>
+            Add widget
+          </button>
+        </section>
+      ) : (
+        <section
+          ref={gridRef}
+          className={`widget-grid ${editing ? 'editing' : ''} ${draggingId ? 'is-dragging' : ''}`}
+          style={{ '--grid-cols': GRID_COLUMNS, '--grid-rows': GRID_ROWS } as React.CSSProperties}
+          aria-label="Dashboard widgets"
+        >
+          {/* Enabled widgets */}
+          {enabledWidgets.map(widget => {
+            const definition = widgetRegistry[widget.widgetType]
+            const hasRedirect = Boolean(widget.configuration.redirectUrl) && !editing
+            const props = {
+              data,
+              state: connection === 'offline' ? 'offline' as const : connection === 'stale' ? 'stale' as const : snapshot ? 'ready' as const : 'loading' as const,
+              message: snapshot?.sourceStates?.notifications,
+              editing,
+              configuration: widget.configuration,
+              onConfigurationChange: (configuration: Record<string, unknown>) => updateConfiguration(widget, configuration),
+              onBookmarkChange: () => setBookmarkDialog({}),
+              onBookmarkDelete: removeBookmark,
+              onBookmarkEdit: (bookmark: Bookmark) => setBookmarkDialog({ bookmark })
+            }
+
+            return (
+              <article
+                key={widget.id}
+                className={`widget-shell ${editing ? 'is-editing' : ''} ${draggingId === widget.id ? 'is-dragging' : ''} ${hasRedirect ? 'has-redirect' : ''}`}
+                style={{
+                  gridColumn: `${widget.layout.x + 1} / span ${widget.layout.width}`,
+                  gridRow: `${widget.layout.y + 1} / span ${widget.layout.height}`
+                }}
+                onClick={event => {
+                  if (editing) return
+                  const target = event.target as HTMLElement
+                  if (target.closest('a, button, input, select, textarea, [role="button"], .resize-handle, .widget-toolbar')) return
+                  const url = String(widget.configuration.redirectUrl ?? '').trim()
+                  if (!url) return
+                  const inNewTab = widget.configuration.redirectNewTab !== false
+                  try {
+                    const parsed = new URL(url)
+                    if (['http:', 'https:'].includes(parsed.protocol)) {
+                      window.open(url, inNewTab ? '_blank' : '_self', 'noopener,noreferrer')
+                    }
+                  } catch {
+                    if (url.startsWith('/')) window.location.href = url
+                  }
+                }}
+              >
+                {editing && (
+                  <div className="widget-toolbar">
+                    <button
+                      className="drag-handle"
+                      aria-label={`Move ${definition?.type ?? 'widget'}`}
+                      title="Drag to move"
+                      onPointerDown={event => onDragStart(event, widget)}
+                      onPointerMove={onDragMove}
+                      onPointerUp={onDragEnd}
+                      onPointerCancel={onDragEnd}
+                    >
+                      <Icon name="move" size={13}/>
+                    </button>
+                    <strong>{definition?.type.replaceAll('-', ' ')}</strong>
+                    <div className="widget-toolbar-actions">
+                      <button onClick={() => setSettingsWidget(widget)} aria-label="Widget settings" title="Settings">
+                        <Icon name="settings" size={14}/>
+                      </button>
+                      <button className="remove-widget" onClick={() => void removeWidget(widget)} aria-label="Remove widget" title="Remove">
+                        <Icon name="remove" size={13}/>
+                      </button>
+                    </div>
+                  </div>
+                )}
+                {definition && <WidgetRenderer definition={definition} props={props}/>}
+                {hasRedirect && <span className="redirect-hint-arrow" aria-hidden="true" title={`Redirects to ${widget.configuration.redirectUrl}`}>↗</span>}
+                {editing && ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'].map(edge => (
+                  <span
+                    key={edge}
+                    className={`resize-handle resize-${edge}`}
+                    role="separator"
+                    aria-label={`Resize ${definition?.type ?? 'widget'} ${edge}`}
+                    onPointerDown={event => onDragStart(event, widget, 'resize', edge)}
+                    onPointerMove={onDragMove}
+                    onPointerUp={onDragEnd}
+                    onPointerCancel={onDragEnd}
+                  />
+                ))}
+              </article>
+            )
+          })}
+
+          {/* Empty grid slots with "+" button rendered during editing mode */}
+          {editing && emptySlots.map(slot => (
+            <button
+              key={`slot-${slot.x}-${slot.y}`}
+              type="button"
+              className="empty-grid-slot"
+              style={{
+                gridColumn: `${slot.x + 1} / span 1`,
+                gridRow: `${slot.y + 1} / span 1`
+              }}
+              onClick={() => {
+                setSelectedSlot({ x: slot.x, y: slot.y })
+                setShowCatalog(true)
+              }}
+              aria-label={`Add widget at cell ${slot.x + 1}, ${slot.y + 1}`}
+              title={`Add widget at (${slot.x + 1}, ${slot.y + 1})`}
+            >
+              <Icon name="plus" size={16}/>
+            </button>
+          ))}
+
+          {dropCell && draggingId && (
+            <div
+              className="drop-indicator"
+              style={{
+                gridColumn: `${dropCell.x + 1} / span ${dropCell.width}`,
+                gridRow: `${dropCell.y + 1} / span ${dropCell.height}`
+              }}
+            />
+          )}
+        </section>
+      )}
+
+      {showCatalog && (
+        <WidgetCatalog
+          definitions={definitions}
+          widgets={widgets}
+          selectedSlot={selectedSlot}
+          onClose={() => { setShowCatalog(false); setSelectedSlot(null) }}
+          onAdd={addWidget}
+        />
+      )}
+
+      {bookmarkDialog && profile && (
+        <BookmarkDialog
+          profileId={profile.id}
+          bookmark={bookmarkDialog.bookmark}
+          onClose={() => setBookmarkDialog(null)}
+          onSaved={bookmarkSaved}
+        />
+      )}
+
+      {settingsWidget && (
+        <WidgetSettings
+          widget={settingsWidget}
+          onClose={() => setSettingsWidget(null)}
+          onSave={configuration => updateConfiguration(settingsWidget, configuration)}
+        />
+      )}
+    </main>
+  )
 }
 
-function WidgetCatalog({definitions,widgets,onClose,onAdd}:{definitions:ApiWidgetDefinition[];widgets:Widget[];onClose:()=>void;onAdd:(definition:ApiWidgetDefinition)=>void}){
-  const labels:Record<string,{title:string;description:string;icon:IconName}>={search:{title:'Search',description:'Search the web from your dashboard.',icon:'search'},bookmarks:{title:'Bookmarks',description:'Your favorite links and quick access.',icon:'bookmark'},notifications:{title:'Notifications',description:'Recent activity from Notification Center.',icon:'bell'},'homelab-performance':{title:'Performance',description:'CPU, memory and metric source status.',icon:'activity'},'service-status':{title:'Service status',description:'Availability of homelab services.',icon:'grid'}}
-  return <div className="overlay catalog-overlay" role="presentation" onMouseDown={event=>{if(event.target===event.currentTarget)onClose()}}><section className="catalog-panel"><div className="catalog-header"><div><p className="kicker">PERSONALIZE YOUR SPACE</p><h2>Widget library</h2><p className="subtle">Choose what you want at a glance.</p></div><button className="close-button" onClick={onClose} aria-label="Close"><Icon name="close"/></button></div><div className="catalog-grid">{definitions.map(definition=>{const info=labels[definition.type]??{title:definition.type,description:'HomeDash widget.',icon:'grid' as IconName},active=widgets.some(widget=>widget.widgetType===definition.type&&widget.isEnabled);return <article className="catalog-card" key={definition.type}><div className="catalog-card-top"><span className="catalog-icon"><Icon name={info.icon} size={17}/></span><span className="catalog-size">{definition.initialSize.w} × {definition.initialSize.h}</span></div><h3>{info.title}</h3><p>{info.description}</p><button disabled={active} className={active?'added-button':'button button-add'} onClick={()=>onAdd(definition)}>{active?'Added ✓':<><Icon name="plus" size={13}/> Add widget</>}</button></article>})}</div><div className="catalog-foot">Widgets can be removed and added again at any time.</div></section></div>
+/* =========================================================================
+   WIDGET CATALOG & CATEGORIES
+   ========================================================================= */
+
+type CatalogCategory = 'all' | 'notifications' | 'bookmarks' | 'search' | 'system'
+
+type CatalogEntryMeta = {
+  category: CatalogCategory
+  title: string
+  subtitle: string
+  description: string
+  icon: IconName
 }
 
-function App(){const[user,setUser]=useState<AuthUser|null>(null);const[checking,setChecking]=useState(true);useEffect(()=>{getSession().then(result=>setUser(result.user)).catch(()=>setUser(null)).finally(()=>setChecking(false))},[]);if(checking)return <main className="login-page"><div className="login-card loading-card"><span className="brand-symbol"><Icon name="grid"/></span><p>Loading dashboard…</p></div></main>;if(!user)return <LoginScreen onAuthenticated={setUser}/>;return <Dashboard user={user} onLogout={async()=>{await logout().catch(()=>undefined);setUser(null)}}/>}
+const CATALOG_METADATA: Record<string, CatalogEntryMeta> = {
+  search: {
+    category: 'search',
+    title: 'Search Bar',
+    subtitle: 'Floating Glass Pill',
+    description: 'Web search bar with engine switcher, Google/DuckDuckGo logos, and Ctrl+K shortcut.',
+    icon: 'search'
+  },
+  'search-compact': {
+    category: 'search',
+    title: 'Search Minimal',
+    subtitle: 'Compact Input',
+    description: 'Minimal borderless search box designed for small 1-cell or 2-cell spaces.',
+    icon: 'search'
+  },
+  bookmarks: {
+    category: 'bookmarks',
+    title: 'Bookmark Cards',
+    subtitle: 'Detailed Tiles',
+    description: 'Rich quick links displaying site title, hostname, and direct launch button.',
+    icon: 'bookmark'
+  },
+  'bookmarks-icons': {
+    category: 'bookmarks',
+    title: 'Bookmark Launchpad',
+    subtitle: 'Icons Only (No Text)',
+    description: 'Clean app launchpad with favicons only and floating hover tooltips.',
+    icon: 'grid'
+  },
+  'bookmarks-dock': {
+    category: 'bookmarks',
+    title: 'Bookmark Dock',
+    subtitle: 'macOS Glass Dock',
+    description: 'Centred horizontal dock of links with zoom and lift animation on hover.',
+    icon: 'bookmark'
+  },
+  notifications: {
+    category: 'notifications',
+    title: 'Notification Feed',
+    subtitle: 'List, Cards & Timeline',
+    description: 'Comprehensive activity stream from Notification Center with severity glow and relative time.',
+    icon: 'bell'
+  },
+  'notifications-badge': {
+    category: 'notifications',
+    title: 'Notification Chip',
+    subtitle: 'Status Counter Badge',
+    description: 'Minimal 1×1 glass bell badge with unread alert counter and live activity pulse.',
+    icon: 'bell'
+  },
+  'notifications-ticker': {
+    category: 'notifications',
+    title: 'Notification Ticker',
+    subtitle: 'Single-Row Headline',
+    description: 'Ultra-compact single-line ticker rotating the latest unread homelab alert.',
+    icon: 'bell'
+  },
+  'homelab-performance': {
+    category: 'system',
+    title: 'Homelab Performance',
+    subtitle: 'CPU · RAM · GPU',
+    description: 'Live hardware utilization metrics and performance status gauges.',
+    icon: 'activity'
+  },
+  'service-status': {
+    category: 'system',
+    title: 'Service Health',
+    subtitle: 'Infrastructure Checks',
+    description: 'Real-time healthcheck status and response status of internal homelab services.',
+    icon: 'grid'
+  }
+}
+
+function WidgetCatalog({
+  definitions,
+  widgets,
+  selectedSlot,
+  onClose,
+  onAdd
+}: {
+  definitions: ApiWidgetDefinition[]
+  widgets: Widget[]
+  selectedSlot: { x: number; y: number } | null
+  onClose: () => void
+  onAdd: (definition: ApiWidgetDefinition) => void
+}) {
+  const [activeTab, setActiveTab] = useState<CatalogCategory>('all')
+
+  const categories: { key: CatalogCategory; label: string }[] = [
+    { key: 'all', label: 'All widgets' },
+    { key: 'notifications', label: 'Notifications' },
+    { key: 'bookmarks', label: 'Bookmarks' },
+    { key: 'search', label: 'Search' },
+    { key: 'system', label: 'System' }
+  ]
+
+  const filtered = definitions.filter(def => {
+    if (activeTab === 'all') return true
+    const meta = CATALOG_METADATA[def.type]
+    return meta?.category === activeTab
+  })
+
+  return (
+    <div className="overlay catalog-overlay" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) onClose() }}>
+      <section className="catalog-panel">
+        <div className="catalog-header">
+          <div>
+            <p className="kicker">
+              {selectedSlot ? `PLACING AT CELL (${selectedSlot.x + 1}, ${selectedSlot.y + 1})` : 'PERSONALIZE YOUR CANVAS'}
+            </p>
+            <h2>Widget Library</h2>
+            <p className="subtle">Add any widget to your dashboard. Multiple instances of any widget are supported.</p>
+          </div>
+          <button className="close-button" onClick={onClose} aria-label="Close"><Icon name="close"/></button>
+        </div>
+
+        {/* Category Tabs */}
+        <div className="catalog-tabs" role="tablist">
+          {categories.map(cat => (
+            <button
+              key={cat.key}
+              type="button"
+              role="tab"
+              aria-selected={activeTab === cat.key}
+              className={`catalog-tab-btn ${activeTab === cat.key ? 'active' : ''}`}
+              onClick={() => setActiveTab(cat.key)}
+            >
+              {cat.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Widgets Grid */}
+        <div className="catalog-grid">
+          {filtered.map(definition => {
+            const meta = CATALOG_METADATA[definition.type] ?? {
+              category: 'system' as CatalogCategory,
+              title: definition.type.replaceAll('-', ' '),
+              subtitle: 'Widget',
+              description: 'HomeDash dashboard widget.',
+              icon: 'grid' as IconName
+            }
+
+            // Count existing instances of this type
+            const activeCount = widgets.filter(w => w.widgetType === definition.type && w.isEnabled).length
+
+            return (
+              <article className="catalog-card" key={definition.type}>
+                <div className="catalog-card-top">
+                  <span className="catalog-icon"><Icon name={meta.icon} size={17}/></span>
+                  <div className="catalog-badges">
+                    {activeCount > 0 && (
+                      <span className="catalog-count-pill">{activeCount} on canvas</span>
+                    )}
+                    <span className="catalog-size">{definition.initialSize.w} × {definition.initialSize.h}</span>
+                  </div>
+                </div>
+                <h3>{meta.title}</h3>
+                <span className="catalog-subtitle">{meta.subtitle}</span>
+                <p>{meta.description}</p>
+                <button
+                  type="button"
+                  className="button button-add"
+                  onClick={() => onAdd(definition)}
+                >
+                  <Icon name="plus" size={13}/>
+                  {selectedSlot ? `Place at (${selectedSlot.x + 1}, ${selectedSlot.y + 1})` : 'Add widget'}
+                </button>
+              </article>
+            )
+          })}
+        </div>
+
+        <div className="catalog-foot">
+          {selectedSlot
+            ? `Selected slot: Row ${selectedSlot.y + 1}, Column ${selectedSlot.x + 1}. You can resize and move it anytime.`
+            : 'You can drag, resize, and configure multiple copies of each widget freely on the grid.'}
+        </div>
+      </section>
+    </div>
+  )
+}
+
+function App() {
+  const [user, setUser] = useState<AuthUser | null>(null)
+  const [checking, setChecking] = useState(true)
+
+  useEffect(() => {
+    getSession()
+      .then(result => setUser(result.user))
+      .catch(() => setUser(null))
+      .finally(() => setChecking(false))
+  }, [])
+
+  if (checking) {
+    return (
+      <main className="login-page">
+        <div className="login-card loading-card">
+          <span className="brand-symbol"><Icon name="grid"/></span>
+          <p>Loading dashboard…</p>
+        </div>
+      </main>
+    )
+  }
+
+  if (!user) return <LoginScreen onAuthenticated={setUser}/>
+
+  return (
+    <Dashboard
+      user={user}
+      onLogout={async () => {
+        await logout().catch(() => undefined)
+        setUser(null)
+      }}
+    />
+  )
+}
+
 export default App

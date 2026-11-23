@@ -150,7 +150,7 @@ select:focus-visible, textarea:focus-visible {
 }
 
 .app-frame:before {
-  background-image: url('/assets/blind-angel.jpg');
+  background-image: url('/assets/blind-angel.webp');
   background-size: cover;
   background-position: center 44%;
   background-repeat: no-repeat;

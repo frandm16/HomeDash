@@ -1,4 +1,10 @@
+/* =========================================================================
+   TOKENS
+   ========================================================================= */
+
 :root {
+  color-scheme: dark;
+
   --canvas: #0b0e13;
   --surface: rgba(19, 26, 36, 0.48);
   --surface-2: rgba(22, 31, 43, 0.62);
@@ -6,14 +12,45 @@
   --line: rgba(226, 237, 255, 0.19);
   --line-soft: rgba(226, 237, 255, 0.11);
   --ink: #f1f5fb;
-  --ink-2: #c2cddd;
-  --muted: #a1afc0;
+  --ink-2: #c8d2e0;
+  --muted: #aebbcb;
   --accent: #6ea8ff;
   --accent-soft: rgba(66, 116, 184, 0.25);
   --good: #93d7a1;
   --warn: #f2c276;
   --bad: #f08282;
-  --glass-blur: 28px;
+
+  --mono: 'DM Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* Liquid glass */
+  --glass-blur: 12px;
+  --glass-saturate: 190%;
+  --glass-bright: 1.08;
+  --glass-tint: rgba(255, 255, 255, 0.05);
+  --glass-radius: 28px;
+  --glass-shadow:
+          inset 2px 2px 1px -1px rgba(255, 255, 255, 0.75),
+          inset -2px -2px 1px -1px rgba(255, 255, 255, 0.35),
+          inset 0 0 24px 2px rgba(255, 255, 255, 0.06),
+          0 12px 40px rgba(0, 0, 0, 0.28);
+  --glass-shadow-hover:
+          inset 2px 2px 1px -1px rgba(255, 255, 255, 0.95),
+          inset -2px -2px 1px -1px rgba(255, 255, 255, 0.5),
+          inset 0 0 30px 4px rgba(255, 255, 255, 0.09),
+          0 18px 50px rgba(0, 0, 0, 0.32),
+          0 0 30px rgba(110, 168, 255, 0.14);
+
+  /* Superficies internas (cajitas dentro de un widget): sin blur propio */
+  --inner-bg: rgba(255, 255, 255, 0.06);
+  --inner-bg-hover: rgba(255, 255, 255, 0.15);
+  --inner-border: rgba(255, 255, 255, 0.16);
+  --inner-hi: inset 0 1px 0 rgba(255, 255, 255, 0.22);
+
+  /* Superficies oscuras (menús, diálogos) */
+  --panel-bg: rgba(14, 22, 33, 0.94);
+  --panel-border: rgba(255, 255, 255, 0.28);
+  --panel-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.45), 0 30px 100px rgba(0, 0, 0, 0.7);
+
   --shadow: 0 18px 55px rgba(0, 0, 0, 0.32);
 }
 
@@ -27,9 +64,10 @@ body {
   color: var(--ink);
   font-family: Manrope, Inter, system-ui, sans-serif;
   overflow: hidden;
+  -webkit-font-smoothing: antialiased;
 }
 
-button, input, select {
+button, input, select, textarea {
   font: inherit;
 }
 
@@ -37,13 +75,61 @@ button {
   cursor: pointer;
 }
 
-button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible {
+button:focus-visible, a:focus-visible, input:focus-visible,
+select:focus-visible, textarea:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 3px;
 }
 
+/* Textos globales usados en login, diálogos y catálogo */
+.kicker {
+  margin: 0 0 6px;
+  color: var(--accent);
+  font: 10px var(--mono);
+  letter-spacing: 1px;
+}
+
+.subtle {
+  color: var(--muted);
+  font-size: 12px;
+  margin: 0;
+}
+
+.form-error {
+  margin: 0;
+  color: var(--bad);
+  font-size: 12px;
+}
+
+.brand-lockup {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font: 700 13px var(--mono);
+  letter-spacing: 1.5px;
+}
+
+.brand-lockup small {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 9px;
+  letter-spacing: 1px;
+}
+
+.brand-symbol {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  background: var(--accent-soft);
+  border: 1px solid var(--inner-border);
+  color: #cfe2ff;
+}
+
 /* =========================================================================
-   BACKGROUND & LIQUID GLASS CANVAS
+   BACKGROUND & CANVAS
    ========================================================================= */
 
 .app-frame {
@@ -70,12 +156,12 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   background-repeat: no-repeat;
 }
 
+/* Velo más ligero: el liquid glass necesita fondo visible para lucir */
 .app-frame:after {
   z-index: -1;
   background:
-    radial-gradient(ellipse at 50% 20%, rgba(66, 116, 184, 0.18), transparent 60%),
-    linear-gradient(180deg, rgba(6, 10, 17, 0.45) 0%, rgba(7, 11, 18, 0.68) 40%, rgba(7, 10, 16, 0.82) 100%),
-    linear-gradient(90deg, rgba(5, 9, 15, 0.2) 0%, transparent 50%, rgba(5, 9, 15, 0.25) 100%);
+          radial-gradient(ellipse at 50% 20%, rgba(66, 116, 184, 0.12), transparent 60%),
+          linear-gradient(180deg, rgba(6, 10, 17, 0.2) 0%, rgba(7, 11, 18, 0.35) 100%);
 }
 
 /* Fullscreen Grid - Driven dynamically by GRID_COLUMNS and GRID_ROWS */
@@ -112,11 +198,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 
 .widget-shell.has-redirect:hover .widget-card {
   transform: translateY(-2px);
-  border-color: rgba(255, 255, 255, 0.48);
-  box-shadow:
-    inset 0 1px 1px rgba(255, 255, 255, 0.7),
-    0 18px 48px rgba(0, 0, 0, 0.36),
-    0 0 25px rgba(110, 168, 255, 0.22);
+  box-shadow: var(--glass-shadow-hover);
 }
 
 .redirect-hint-arrow {
@@ -125,7 +207,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   right: 12px;
   z-index: 2;
   font-size: 11px;
-  color: rgba(255, 255, 255, 0.45);
+  color: rgba(255, 255, 255, 0.55);
   pointer-events: none;
   opacity: 0;
   transition: opacity 0.15s;
@@ -144,7 +226,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .widget-shell.is-editing {
   outline: 1.5px dashed rgba(166, 202, 255, 0.75);
   outline-offset: 4px;
-  border-radius: 28px;
+  border-radius: var(--glass-radius);
   touch-action: none;
 }
 
@@ -153,17 +235,49 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   opacity: 0.6;
 }
 
+/* ── Per-widget background style variants ─────────────────────────────────── */
+
+/* transparent: hide the glass card entirely */
+.widget-bg-transparent .widget-card {
+  background: transparent !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+.widget-bg-transparent .widget-card::before,
+.widget-bg-transparent .widget-card::after {
+  display: none !important;
+}
+
+/* solid: opaque dark surface, no blur */
+.widget-bg-solid .widget-card {
+  background: rgba(14, 20, 30, 0.94) !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+/* tinted: subtle accent color wash over the glass */
+.widget-bg-tinted .widget-card {
+  background: color-mix(in srgb, var(--accent, #6ea8ff) 12%, rgba(14, 22, 34, 0.55)) !important;
+  border-color: color-mix(in srgb, var(--accent, #6ea8ff) 35%, rgba(255,255,255,0.1)) !important;
+  box-shadow: var(--glass-shadow), 0 0 40px color-mix(in srgb, var(--accent, #6ea8ff) 18%, transparent) !important;
+}
+
 .drop-indicator {
   z-index: 1;
   pointer-events: none;
   border: 1.5px solid var(--accent);
-  border-radius: 28px;
+  border-radius: var(--glass-radius);
   background: rgba(110, 168, 255, 0.22);
   box-shadow: 0 0 0 4px rgba(110, 168, 255, 0.15);
 }
 
 /* =========================================================================
-   CORE LIQUID GLASS COMPONENT SURFACE
+   CORE LIQUID GLASS SURFACE
+   Los reflejos van en el propio background y en box-shadow inset (no en
+   ::before/::after) para que NO se desplacen cuando el widget hace scroll.
    ========================================================================= */
 
 .widget-card {
@@ -171,44 +285,29 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   height: 100%;
   min-height: 100%;
   overflow: auto;
-  border-radius: 28px;
+  border-radius: var(--glass-radius);
   padding: 16px;
-  background: linear-gradient(
-    135deg,
-    rgba(255, 255, 255, 0.18) 0%,
-    rgba(200, 225, 255, 0.06) 45%,
-    rgba(255, 255, 255, 0.12) 100%
-  );
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  box-shadow:
-    inset 0 1px 1px rgba(255, 255, 255, 0.5),
-    inset 0 -1px 2px rgba(0, 0, 0, 0.25),
-    0 16px 45px rgba(0, 0, 0, 0.32),
-    0 0 25px rgba(110, 168, 255, 0.08);
-  backdrop-filter: blur(var(--glass-blur)) saturate(180%);
-  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(180%);
-  transition: box-shadow 0.2s, border-color 0.2s, transform 0.2s;
-}
 
-.widget-card:before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  border-radius: inherit;
   background:
-    radial-gradient(130% 90% at 0% 0%, rgba(255, 255, 255, 0.26), transparent 50%),
-    linear-gradient(120deg, rgba(255, 255, 255, 0.12), transparent 45%);
-  opacity: 0.85;
+          radial-gradient(120% 70% at 15% 0%, rgba(255, 255, 255, 0.2), transparent 55%),
+          linear-gradient(160deg, rgba(255, 255, 255, 0.08), transparent 40%, rgba(255, 255, 255, 0.05) 100%),
+          var(--glass-tint);
+
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate)) brightness(var(--glass-bright));
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate)) brightness(var(--glass-bright));
+
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: var(--glass-shadow);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.3) transparent;
+  transition: box-shadow 0.25s, border-color 0.25s, transform 0.25s;
 }
 
 .widget-card:hover {
-  border-color: rgba(255, 255, 255, 0.42);
-  box-shadow:
-    inset 0 1px 1px rgba(255, 255, 255, 0.65),
-    inset 0 -1px 2px rgba(0, 0, 0, 0.25),
-    0 20px 52px rgba(0, 0, 0, 0.36),
-    0 0 32px rgba(110, 168, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.28);
+  box-shadow: var(--glass-shadow-hover);
 }
 
 .widget-card > * {
@@ -241,10 +340,11 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   -webkit-backdrop-filter: blur(16px);
   box-sizing: border-box;
   overflow: hidden;
+  text-shadow: none;
 }
 
 .widget-toolbar > strong {
-  font: 9px 'DM Mono', monospace;
+  font: 10px var(--mono);
   color: var(--ink-2);
   text-transform: uppercase;
   flex: 1;
@@ -358,7 +458,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 }
 
 .search-widget input::placeholder {
-  color: rgba(239, 246, 255, 0.62);
+  color: rgba(239, 246, 255, 0.7);
 }
 
 .search-provider-badge {
@@ -392,9 +492,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   padding: 4px 8px;
   border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 8px;
-  color: rgba(239, 246, 255, 0.72);
-  font-size: 10px;
-  font-family: 'DM Mono', monospace;
+  color: rgba(239, 246, 255, 0.78);
+  font: 10px var(--mono);
   background: rgba(0, 0, 0, 0.15);
 }
 
@@ -446,7 +545,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   border-radius: 16px;
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.2);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  box-shadow: var(--inner-hi);
 }
 
 .search-widget.style-compact input {
@@ -458,20 +557,23 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   width: 17px;
   height: 17px;
   stroke: var(--accent);
-  opacity: 0.85;
+  opacity: 0.9;
 }
 
 .search-widget.style-floating-glow {
   border-radius: 9999px;
   border-color: rgba(142, 197, 255, 0.5);
   box-shadow:
-    inset 0 1px 1px rgba(255, 255, 255, 0.6),
-    0 0 35px rgba(110, 168, 255, 0.28),
-    0 16px 45px rgba(0, 0, 0, 0.32);
+          inset 2px 2px 1px -1px rgba(255, 255, 255, 0.8),
+          inset -2px -2px 1px -1px rgba(255, 255, 255, 0.35),
+          0 0 35px rgba(110, 168, 255, 0.32),
+          0 16px 45px rgba(0, 0, 0, 0.32);
 }
 
 /* =========================================================================
    BOOKMARKS WIDGET VARIANTS (icons-only, tiles, compact-chips, dock)
+   Las cajitas internas NO llevan backdrop-filter: dentro de un padre con
+   blur no se renderiza bien y solo gasta GPU.
    ========================================================================= */
 
 .bookmarks-widget {
@@ -490,7 +592,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   background: rgba(255, 255, 255, 0.12);
   color: #fff;
   border-radius: 10px;
-  font-size: 10px;
+  font-size: 11px;
   padding: 5px 10px;
   transition: background 0.15s;
 }
@@ -545,13 +647,14 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   width: 52px;
   height: 52px;
   border-radius: 18px;
-  background: rgba(255, 255, 255, 0.12);
-  border: 1px solid rgba(255, 255, 255, 0.3);
+  background:
+          radial-gradient(100% 70% at 20% 0%, rgba(255, 255, 255, 0.25), transparent 60%),
+          rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.28);
   box-shadow:
-    inset 0 1px 1px rgba(255, 255, 255, 0.5),
-    0 8px 22px rgba(0, 0, 0, 0.22);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+          inset 1px 1px 1px -0.5px rgba(255, 255, 255, 0.7),
+          inset -1px -1px 1px -0.5px rgba(255, 255, 255, 0.3),
+          0 8px 22px rgba(0, 0, 0, 0.22);
   transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.2s, box-shadow 0.2s;
   text-decoration: none;
   position: relative;
@@ -565,12 +668,14 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 
 .bookmark-icon-anchor:hover {
   transform: translateY(-4px) scale(1.08);
-  background: rgba(255, 255, 255, 0.22);
+  background:
+          radial-gradient(100% 70% at 20% 0%, rgba(255, 255, 255, 0.35), transparent 60%),
+          rgba(255, 255, 255, 0.18);
   border-color: rgba(255, 255, 255, 0.5);
   box-shadow:
-    inset 0 1px 1px rgba(255, 255, 255, 0.7),
-    0 14px 28px rgba(0, 0, 0, 0.32),
-    0 0 20px rgba(110, 168, 255, 0.3);
+          inset 1px 1px 1px -0.5px rgba(255, 255, 255, 0.9),
+          0 14px 28px rgba(0, 0, 0, 0.32),
+          0 0 20px rgba(110, 168, 255, 0.3);
 }
 
 .bookmark-icon-anchor .bookmark-icon {
@@ -599,13 +704,14 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 8px;
   color: #fff;
-  font-size: 10px;
+  font-size: 11px;
   white-space: nowrap;
   pointer-events: none;
   opacity: 0;
   transition: opacity 0.15s, transform 0.15s;
   z-index: 10;
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+  text-shadow: none;
 }
 
 .bookmark-icon-anchor:hover .bookmark-floating-tooltip {
@@ -631,17 +737,17 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   align-items: center;
   gap: 9px;
   padding: 8px 10px;
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  border: 1px solid var(--inner-border);
   border-radius: 16px;
   text-decoration: none;
   color: var(--ink);
-  background: rgba(255, 255, 255, 0.08);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  background: var(--inner-bg);
+  box-shadow: var(--inner-hi);
   transition: background 0.15s, border-color 0.15s, transform 0.15s;
 }
 
 .bookmark-tile > a:hover {
-  background: rgba(255, 255, 255, 0.18);
+  background: var(--inner-bg-hover);
   border-color: rgba(255, 255, 255, 0.35);
   transform: translateY(-2px);
 }
@@ -654,23 +760,23 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 }
 
 .bookmark-copy strong {
-  font-size: 11px;
+  font-size: 12px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .bookmark-copy small {
-  color: #a7b7cc;
-  font-size: 9px;
+  color: #b4c2d4;
+  font-size: 10px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .tile-arrow {
-  font-size: 10px;
-  color: #9eb1c7;
+  font-size: 11px;
+  color: #aebfd3;
 }
 
 /* 3. COMPACT-CHIPS STYLE */
@@ -690,16 +796,17 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   gap: 8px;
   padding: 6px 12px;
   border-radius: 9999px;
-  background: rgba(255, 255, 255, 0.09);
-  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: var(--inner-bg);
+  border: 1px solid var(--inner-border);
+  box-shadow: var(--inner-hi);
   text-decoration: none;
   color: #f1f5fb;
-  font-size: 11px;
+  font-size: 12px;
   transition: background 0.15s, transform 0.15s;
 }
 
 .bookmark-chip-anchor:hover {
-  background: rgba(255, 255, 255, 0.2);
+  background: var(--inner-bg-hover);
   transform: translateY(-2px);
 }
 
@@ -722,8 +829,13 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   gap: 12px;
   padding: 10px 16px;
   border-radius: 24px;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  background:
+          radial-gradient(100% 80% at 20% 0%, rgba(255, 255, 255, 0.14), transparent 60%),
+          rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--inner-border);
+  box-shadow:
+          inset 1px 1px 1px -0.5px rgba(255, 255, 255, 0.6),
+          inset -1px -1px 1px -0.5px rgba(255, 255, 255, 0.25);
   width: fit-content;
   margin: auto;
 }
@@ -761,8 +873,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 }
 
 .bookmark-dock-label {
-  font-size: 10px;
-  color: #cedbec;
+  font-size: 11px;
+  color: #d6e2f1;
 }
 
 .bookmark-edit-actions {
@@ -779,12 +891,13 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 6px;
   color: var(--ink-2);
-  font-size: 9px;
+  font-size: 10px;
   width: 18px;
   height: 18px;
   display: grid;
   place-items: center;
   padding: 0;
+  text-shadow: none;
 }
 
 /* 5. SINGLE-BOOKMARK HERO SQUARE WIDGET */
@@ -807,10 +920,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .single-bookmark-card.is-clickable:hover {
   transform: translateY(-3px) scale(1.02);
   border-color: rgba(255, 255, 255, 0.5);
-  box-shadow:
-    inset 0 1px 1px rgba(255, 255, 255, 0.7),
-    0 18px 45px rgba(0, 0, 0, 0.38),
-    0 0 30px rgba(110, 168, 255, 0.25);
+  box-shadow: var(--glass-shadow-hover), 0 0 30px rgba(110, 168, 255, 0.2);
 }
 
 .single-bookmark-inner {
@@ -827,11 +937,14 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   border-radius: 18px;
   display: grid;
   place-items: center;
-  background: rgba(255, 255, 255, 0.14);
-  border: 1px solid rgba(255, 255, 255, 0.35);
+  background:
+          radial-gradient(100% 70% at 20% 0%, rgba(255, 255, 255, 0.28), transparent 60%),
+          rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.32);
   box-shadow:
-    inset 0 1px 1px rgba(255, 255, 255, 0.5),
-    0 8px 24px rgba(0, 0, 0, 0.28);
+          inset 1px 1px 1px -0.5px rgba(255, 255, 255, 0.7),
+          inset -1px -1px 1px -0.5px rgba(255, 255, 255, 0.3),
+          0 8px 24px rgba(0, 0, 0, 0.28);
   flex: none;
   overflow: hidden;
   transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
@@ -873,8 +986,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 }
 
 .single-bookmark-host {
-  font: 9px 'DM Mono', monospace;
-  color: #a4b5cb;
+  font: 10px var(--mono);
+  color: #b2c2d6;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -885,7 +998,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   top: 12px;
   right: 14px;
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.4);
+  color: rgba(255, 255, 255, 0.5);
   transition: opacity 0.15s, transform 0.15s;
 }
 
@@ -941,7 +1054,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   background: rgba(255, 255, 255, 0.1);
   border: 1px solid rgba(255, 255, 255, 0.2);
   color: var(--ink-2);
-  font-size: 10px;
+  font-size: 11px;
   cursor: pointer;
 }
 
@@ -981,8 +1094,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   border: 1px solid rgba(218, 235, 255, 0.25);
   border-radius: 20px;
   padding: 4px 10px;
-  color: #c2dcff;
-  font: 9px 'DM Mono', monospace;
+  color: #cfe3ff;
+  font: 10px var(--mono);
   background: rgba(12, 24, 40, 0.35);
 }
 
@@ -994,7 +1107,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   height: 100%;
   text-align: center;
   padding: 20px 0;
-  color: #b0c0d4;
+  color: #bccadb;
 }
 
 .empty-bell-icon {
@@ -1003,21 +1116,22 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   border-radius: 16px;
   display: grid;
   place-items: center;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: var(--inner-bg);
+  border: 1px solid var(--inner-border);
+  box-shadow: var(--inner-hi);
   margin-bottom: 10px;
-  color: #79a8e0;
+  color: #8ab4ea;
 }
 
 .notifications-empty-state p {
   margin: 0 0 4px;
   font-size: 13px;
   font-weight: 600;
-  color: #e8edf4;
+  color: #eef2f8;
 }
 
 .notifications-empty-state small {
-  font-size: 10px;
+  font-size: 11px;
 }
 
 /* 1. CARDS STYLE */
@@ -1029,9 +1143,9 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .glass-notification-card {
   padding: 12px 14px;
   border-radius: 18px;
-  background: rgba(255, 255, 255, 0.07);
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  background: var(--inner-bg);
+  border: 1px solid var(--inner-border);
+  box-shadow: var(--inner-hi);
   display: grid;
   gap: 5px;
 }
@@ -1043,12 +1157,12 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 }
 
 .notif-status-badge {
-  font: 8px 'DM Mono', monospace;
+  font: 9px var(--mono);
   text-transform: uppercase;
   padding: 2px 6px;
   border-radius: 6px;
-  background: rgba(110, 168, 255, 0.2);
-  color: #a4cbff;
+  background: rgba(110, 168, 255, 0.22);
+  color: #b4d3ff;
 }
 
 .notif-status-badge.level-success {
@@ -1067,8 +1181,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 }
 
 .notif-card-header time {
-  font: 9px 'DM Mono', monospace;
-  color: #a3b3c7;
+  font: 10px var(--mono);
+  color: #b2c1d4;
 }
 
 .notif-card-title {
@@ -1077,15 +1191,15 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 }
 
 .notif-card-body {
-  font-size: 10px;
-  color: #c0cbd9;
+  font-size: 11px;
+  color: #ccd6e3;
   line-height: 1.4;
   margin: 0;
 }
 
 .notif-card-footer small {
-  font: 8px 'DM Mono', monospace;
-  color: #8c9eb5;
+  font: 9px var(--mono);
+  color: #9fb0c5;
 }
 
 /* 2. TIMELINE STYLE */
@@ -1112,7 +1226,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   top: 4px;
   bottom: 4px;
   width: 2px;
-  background: rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.18);
   border-radius: 2px;
 }
 
@@ -1143,17 +1257,17 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .timeline-meta {
   display: flex;
   justify-content: space-between;
-  font: 8px 'DM Mono', monospace;
-  color: #9cb0c7;
+  font: 9px var(--mono);
+  color: #aabcd2;
 }
 
 .timeline-title {
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .timeline-desc {
-  font-size: 9px;
-  color: #b7c4d4;
+  font-size: 10px;
+  color: #c3cfde;
   margin: 0;
 }
 
@@ -1177,13 +1291,13 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   border-radius: 9999px;
   background: rgba(110, 168, 255, 0.22);
   border: 1px solid rgba(110, 168, 255, 0.4);
-  font: 9px 'DM Mono', monospace;
-  color: #c7dfff;
+  font: 10px var(--mono);
+  color: #d2e5ff;
 }
 
 .ticker-time {
-  font: 9px 'DM Mono', monospace;
-  color: #a3b3c7;
+  font: 10px var(--mono);
+  color: #b2c1d4;
 }
 
 .ticker-headline {
@@ -1192,20 +1306,21 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   gap: 2px;
   padding: 8px 12px;
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: var(--inner-bg);
+  border: 1px solid var(--inner-border);
+  box-shadow: var(--inner-hi);
 }
 
 .ticker-headline strong {
-  font-size: 11px;
+  font-size: 12px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .ticker-headline p {
-  font-size: 9px;
-  color: #b7c5d6;
+  font-size: 10px;
+  color: #c3cfde;
   margin: 0;
   white-space: nowrap;
   overflow: hidden;
@@ -1230,10 +1345,14 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   border-radius: 20px;
   display: grid;
   place-items: center;
-  background: rgba(255, 255, 255, 0.12);
-  border: 1px solid rgba(255, 255, 255, 0.32);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
-  color: #87b9ff;
+  background:
+          radial-gradient(100% 70% at 20% 0%, rgba(255, 255, 255, 0.28), transparent 60%),
+          rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  box-shadow:
+          inset 1px 1px 1px -0.5px rgba(255, 255, 255, 0.7),
+          0 8px 24px rgba(0, 0, 0, 0.28);
+  color: #9cc6ff;
   margin-bottom: 4px;
 }
 
@@ -1258,23 +1377,18 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .badge-hero-count {
   font-size: 26px;
   font-weight: 800;
-  font-family: 'DM Mono', monospace;
+  font-family: var(--mono);
   letter-spacing: -1px;
 }
 
 .badge-hero-label {
-  font-size: 9px;
-  color: #a4b5cb;
+  font: 10px var(--mono);
+  color: #b2c2d6;
   text-transform: uppercase;
-  font-family: 'DM Mono', monospace;
 }
 
 /* =========================================================================
-   PERFORMANCE & SERVICES STYLES
-   ========================================================================= */
-
-/* =========================================================================
-   PERFORMANCE & HARDWARE METRICS STYLES (RADIAL GAUGES, GRAPHS, KPI TILES)
+   PERFORMANCE & HARDWARE METRICS (RADIAL GAUGES, GRAPHS, KPI TILES, BARS)
    ========================================================================= */
 
 .performance-widget {
@@ -1323,21 +1437,21 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 }
 
 .radial-gauge-center strong {
-  font: 700 13px 'DM Mono', monospace;
+  font: 700 13px var(--mono);
   color: #fff;
   letter-spacing: -0.5px;
 }
 
 .radial-gauge-label {
-  font: 700 10px 'DM Mono', monospace;
+  font: 700 10px var(--mono);
   color: var(--ink);
   letter-spacing: 0.5px;
   text-transform: uppercase;
 }
 
 .radial-gauge-detail {
-  font: 8px 'DM Mono', monospace;
-  color: #a3b5cc;
+  font: 9px var(--mono);
+  color: #b2c3d9;
   white-space: nowrap;
 }
 
@@ -1354,14 +1468,14 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   display: flex;
   align-items: center;
   gap: 14px;
-  font: 10px 'DM Mono', monospace;
+  font: 10px var(--mono);
 }
 
 .legend-item {
   display: flex;
   align-items: center;
   gap: 6px;
-  color: #c0d1e5;
+  color: #ccdbec;
 }
 
 .legend-item i {
@@ -1386,6 +1500,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   border-radius: 14px;
   background: rgba(0, 0, 0, 0.22);
   border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.25);
   overflow: hidden;
   display: flex;
   align-items: flex-end;
@@ -1404,8 +1519,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .timeseries-footer {
   display: flex;
   justify-content: space-between;
-  font: 8px 'DM Mono', monospace;
-  color: #9cb0c7;
+  font: 9px var(--mono);
+  color: #aabcd2;
 }
 
 /* 3. KPI Stat Tiles */
@@ -1425,21 +1540,21 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   flex: 1;
   padding: 8px;
   border-radius: 16px;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  background: var(--inner-bg);
+  border: 1px solid var(--inner-border);
+  box-shadow: var(--inner-hi);
 }
 
 .kpi-label {
-  font: 9px 'DM Mono', monospace;
-  color: #a4b5cb;
+  font: 10px var(--mono);
+  color: #b2c2d6;
   letter-spacing: 1px;
   text-transform: uppercase;
   margin-bottom: 2px;
 }
 
 .kpi-value {
-  font: 800 20px 'DM Mono', monospace;
+  font: 800 20px var(--mono);
   color: #fff;
   letter-spacing: -0.5px;
 }
@@ -1459,19 +1574,19 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   display: flex;
   justify-content: space-between;
   margin-bottom: 6px;
-  color: #d6dfeb;
-  font-size: 10px;
+  color: #dfe7f1;
+  font-size: 11px;
 }
 
 .metric-label strong {
   color: var(--ink);
-  font: 11px 'DM Mono', monospace;
+  font: 11px var(--mono);
 }
 
 .metric-track {
   height: 5px;
   border-radius: 5px;
-  background: rgba(229, 240, 255, 0.18);
+  background: rgba(229, 240, 255, 0.2);
   overflow: hidden;
 }
 
@@ -1491,8 +1606,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   align-items: center;
   gap: 8px;
   padding: 8px 0;
-  border-bottom: 1px solid rgba(238, 246, 255, 0.08);
-  font-size: 10px;
+  border-bottom: 1px solid rgba(238, 246, 255, 0.1);
+  font-size: 11px;
 }
 
 .service-item span {
@@ -1500,8 +1615,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 }
 
 .service-item small {
-  color: #c0ccdb;
-  font: 9px 'DM Mono', monospace;
+  color: #ccd7e5;
+  font: 10px var(--mono);
 }
 
 .status-lamp {
@@ -1510,13 +1625,15 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   border-radius: 50%;
   display: inline-block;
   background: var(--good);
+  box-shadow: 0 0 6px currentColor;
+  color: var(--good);
   flex: none;
 }
-.status-lamp.offline, .status-lamp.error { background: var(--bad); }
-.status-lamp.stale, .status-lamp.loading { background: var(--warn); }
+.status-lamp.offline, .status-lamp.error { background: var(--bad); color: var(--bad); }
+.status-lamp.stale, .status-lamp.loading { background: var(--warn); color: var(--warn); }
 
 /* =========================================================================
-   CLOCK HERO WIDGET STYLES (DIGITAL, ANALOG, WORLD)
+   CLOCK HERO WIDGET (DIGITAL, ANALOG, WORLD)
    ========================================================================= */
 
 .clock-hero-widget {
@@ -1538,7 +1655,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 }
 
 .digital-hours-mins {
-  font: 800 clamp(32px, 5.5vw, 68px) 'DM Mono', monospace;
+  font: 800 clamp(32px, 5.5vw, 68px) var(--mono);
   color: #fff;
   letter-spacing: -2px;
   line-height: 1;
@@ -1546,22 +1663,22 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 }
 
 .digital-seconds {
-  font: 700 clamp(16px, 2.2vw, 28px) 'DM Mono', monospace;
+  font: 700 clamp(16px, 2.2vw, 28px) var(--mono);
   color: var(--accent);
-  opacity: 0.85;
+  opacity: 0.9;
 }
 
 .digital-ampm {
-  font: 700 12px 'DM Mono', monospace;
-  color: #a4b5cb;
+  font: 700 12px var(--mono);
+  color: #b2c2d6;
   margin-left: 6px;
   letter-spacing: 1px;
 }
 
 .digital-date-badge {
   margin-top: 6px;
-  font: 600 11px 'DM Mono', monospace;
-  color: #c0d1e5;
+  font: 600 11px var(--mono);
+  color: #ccdbec;
   letter-spacing: 0.5px;
   text-transform: uppercase;
 }
@@ -1582,7 +1699,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 
 .analog-face {
   fill: rgba(0, 0, 0, 0.2);
-  stroke: rgba(255, 255, 255, 0.28);
+  stroke: rgba(255, 255, 255, 0.3);
   stroke-width: 2;
 }
 
@@ -1622,8 +1739,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 
 .analog-date-label {
   margin-top: 6px;
-  font: 9px 'DM Mono', monospace;
-  color: #a4b5cb;
+  font: 10px var(--mono);
+  color: #b2c2d6;
   text-transform: uppercase;
 }
 
@@ -1644,33 +1761,33 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 }
 
 .world-clock-badge {
-  font: 8px 'DM Mono', monospace;
+  font: 9px var(--mono);
   letter-spacing: 1px;
   padding: 2px 7px;
   border-radius: 6px;
-  background: rgba(255, 255, 255, 0.1);
-  color: #c7dfff;
+  background: rgba(255, 255, 255, 0.12);
+  color: #d2e5ff;
 }
 
 .world-clock-time {
-  font: 800 24px 'DM Mono', monospace;
+  font: 800 24px var(--mono);
   color: #fff;
   letter-spacing: -1px;
 }
 
 .world-clock-col small {
-  font: 8px 'DM Mono', monospace;
-  color: #9cb0c7;
+  font: 9px var(--mono);
+  color: #aabcd2;
 }
 
 .world-clock-divider {
   width: 1px;
   height: 44px;
-  background: rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.2);
 }
 
 /* =========================================================================
-   COUNTDOWN EVENT WIDGET STYLES (HERO COUNTER, COMPACT, PROGRESS)
+   COUNTDOWN EVENT WIDGET (HERO COUNTER, COMPACT, PROGRESS)
    ========================================================================= */
 
 .countdown-widget {
@@ -1705,7 +1822,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   background: rgba(147, 215, 161, 0.2);
   border: 1px solid rgba(147, 215, 161, 0.4);
   color: var(--good);
-  font: 700 11px 'DM Mono', monospace;
+  font: 700 11px var(--mono);
 }
 
 .countdown-header-row {
@@ -1742,28 +1859,28 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   justify-content: center;
   padding: 8px 4px;
   border-radius: 14px;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  background: var(--inner-bg);
+  border: 1px solid var(--inner-border);
+  box-shadow: var(--inner-hi);
 }
 
 .digit-num {
-  font: 800 clamp(18px, 2.8vw, 30px) 'DM Mono', monospace;
+  font: 800 clamp(18px, 2.8vw, 30px) var(--mono);
   color: #fff;
   letter-spacing: -1px;
   line-height: 1;
 }
 
 .digit-unit {
-  font: 700 8px 'DM Mono', monospace;
-  color: #a4b5cb;
+  font: 700 9px var(--mono);
+  color: #b2c2d6;
   letter-spacing: 0.5px;
   margin-top: 3px;
 }
 
 .countdown-target-label {
-  font: 8px 'DM Mono', monospace;
-  color: #9cb0c7;
+  font: 9px var(--mono);
+  color: #aabcd2;
   text-align: right;
   white-space: nowrap;
   overflow: hidden;
@@ -1797,7 +1914,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 }
 
 .countdown-compact-days {
-  font: 9px 'DM Mono', monospace;
+  font: 10px var(--mono);
   color: var(--accent);
 }
 
@@ -1815,12 +1932,12 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 }
 
 .strip-val {
-  font: 9px 'DM Mono', monospace;
-  color: #a4b5cb;
+  font: 10px var(--mono);
+  color: #b2c2d6;
 }
 
 .strip-val strong {
-  font: 800 16px 'DM Mono', monospace;
+  font: 800 16px var(--mono);
   color: #fff;
   margin-right: 2px;
 }
@@ -1828,7 +1945,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .countdown-progress-track {
   height: 6px;
   border-radius: 6px;
-  background: rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.16);
   overflow: hidden;
 }
 
@@ -1841,13 +1958,13 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .countdown-progress-label {
   display: flex;
   justify-content: space-between;
-  font: 8px 'DM Mono', monospace;
-  color: #9cb0c7;
+  font: 9px var(--mono);
+  color: #aabcd2;
   margin-top: 4px;
 }
 
 /* =========================================================================
-   STICKY NOTE & CHECKLIST WIDGET STYLES
+   STICKY NOTE & CHECKLIST WIDGET
    ========================================================================= */
 
 .sticky-note-widget {
@@ -1878,8 +1995,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .sticky-pin.pin-purple { background: #d4a3ff; box-shadow: 0 0 8px #d4a3ff; }
 
 .sticky-note-tag {
-  font: 700 9px 'DM Mono', monospace;
-  color: #a4b5cb;
+  font: 700 10px var(--mono);
+  color: #b2c2d6;
   letter-spacing: 0.5px;
   text-transform: uppercase;
 }
@@ -1899,7 +2016,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 }
 
 .sticky-note-textarea::placeholder {
-  color: rgba(255, 255, 255, 0.4);
+  color: rgba(255, 255, 255, 0.5);
 }
 
 /* Checklist Mode */
@@ -1931,20 +2048,21 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 }
 
 .checklist-item-row:hover {
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.1);
 }
 
 .custom-checkbox {
   width: 16px;
   height: 16px;
   border-radius: 5px;
-  border: 1.5px solid rgba(255, 255, 255, 0.35);
+  border: 1.5px solid rgba(255, 255, 255, 0.4);
   display: grid;
   place-items: center;
   font-size: 11px;
   font-weight: 800;
   color: #0b131f;
   flex: none;
+  text-shadow: none;
 }
 
 .custom-checkbox.checked {
@@ -1953,7 +2071,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 }
 
 .checklist-item-text {
-  font-size: 11px;
+  font-size: 12px;
   color: #f1f5fb;
   flex: 1;
   overflow: hidden;
@@ -1963,13 +2081,13 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 
 .checklist-item-row.is-done .checklist-item-text {
   text-decoration: line-through;
-  color: #8c9eb5;
+  color: #9fb0c5;
 }
 
 .checklist-del-btn {
   background: transparent;
   border: 0;
-  color: rgba(255, 255, 255, 0.4);
+  color: rgba(255, 255, 255, 0.5);
   font-size: 13px;
   cursor: pointer;
   padding: 0 4px;
@@ -2009,7 +2127,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 }
 
 /* =========================================================================
-   EMPTY STATE, CORNER MENU & OVERLAYS
+   EMPTY STATE
    ========================================================================= */
 
 .empty-dashboard {
@@ -2022,7 +2140,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 }
 
 .empty-dashboard p {
-  color: #c0cbd9;
+  color: #ccd6e3;
   font-size: 14px;
   margin: 0;
 }
@@ -2040,10 +2158,10 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   border-radius: 24px;
   background: rgba(255, 255, 255, 0.035);
   border: 1.5px dashed rgba(255, 255, 255, 0.22);
-  color: rgba(255, 255, 255, 0.4);
+  color: rgba(255, 255, 255, 0.45);
   cursor: pointer;
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
   padding: 0;
   z-index: 2;
@@ -2055,8 +2173,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   color: #fff;
   transform: scale(0.96);
   box-shadow:
-    inset 0 1px 1px rgba(255, 255, 255, 0.5),
-    0 0 24px rgba(110, 168, 255, 0.3);
+          inset 0 1px 1px rgba(255, 255, 255, 0.5),
+          0 0 24px rgba(110, 168, 255, 0.3);
 }
 
 .widget-grid.is-dragging .empty-grid-slot {
@@ -2065,7 +2183,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 }
 
 /* =========================================================================
-   CANVAS CONTEXT MENU (RIGHT-CLICK)
+   CANVAS CONTEXT MENU (RIGHT-CLICK) & FLOATING MENUS
    ========================================================================= */
 
 .canvas-context-menu {
@@ -2079,20 +2197,21 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   backdrop-filter: blur(30px);
   -webkit-backdrop-filter: blur(30px);
   box-shadow:
-    inset 0 1px 1px rgba(255, 255, 255, 0.4),
-    0 20px 50px rgba(0, 0, 0, 0.6);
+          inset 0 1px 1px rgba(255, 255, 255, 0.4),
+          0 20px 50px rgba(0, 0, 0, 0.6);
   animation: menu-in 0.15s ease-out;
 }
 
 .menu-header {
   padding: 8px 12px 6px;
   color: var(--muted);
-  font: 9px 'DM Mono', monospace;
+  font: 10px var(--mono);
   text-transform: uppercase;
   letter-spacing: 1px;
 }
 
-.canvas-context-menu button {
+.canvas-context-menu button,
+.gear-dropdown button {
   width: 100%;
   display: flex;
   align-items: center;
@@ -2103,16 +2222,18 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   background: transparent;
   color: var(--ink-2);
   text-align: left;
-  font-size: 11px;
+  font-size: 12px;
   transition: background 0.15s, color 0.15s;
 }
 
-.canvas-context-menu button:hover {
+.canvas-context-menu button:hover,
+.gear-dropdown button:hover {
   background: rgba(255, 255, 255, 0.12);
   color: #fff;
 }
 
-.canvas-context-menu button svg {
+.canvas-context-menu button svg,
+.gear-dropdown button svg {
   color: var(--accent);
 }
 
@@ -2147,8 +2268,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   background: rgba(15, 23, 34, 0.88);
   border: 1px solid rgba(255, 255, 255, 0.3);
   box-shadow:
-    inset 0 1px 1px rgba(255, 255, 255, 0.4),
-    0 16px 45px rgba(0, 0, 0, 0.5);
+          inset 0 1px 1px rgba(255, 255, 255, 0.4),
+          0 16px 45px rgba(0, 0, 0, 0.5);
   backdrop-filter: blur(28px);
   -webkit-backdrop-filter: blur(28px);
   animation: dock-slide-up 0.25s cubic-bezier(0.16, 1, 0.3, 1);
@@ -2167,8 +2288,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   border-radius: 14px;
   background: rgba(110, 168, 255, 0.15);
   border: 1px solid rgba(110, 168, 255, 0.3);
-  font: 10px 'DM Mono', monospace;
-  color: #c7dfff;
+  font: 10px var(--mono);
+  color: #d2e5ff;
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
@@ -2206,13 +2327,13 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   border-radius: 14px;
   background: rgba(19, 27, 39, 0.65);
   color: #f1f5fb;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
-  backdrop-filter: blur(var(--glass-blur));
-  -webkit-backdrop-filter: blur(var(--glass-blur));
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
   box-shadow:
-    inset 0 1px 1px rgba(255, 255, 255, 0.35),
-    0 6px 20px rgba(0, 0, 0, 0.3);
+          inset 0 1px 1px rgba(255, 255, 255, 0.35),
+          0 6px 20px rgba(0, 0, 0, 0.3);
   transition: background 0.15s, transform 0.15s;
 }
 
@@ -2239,34 +2360,11 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .menu-user {
   padding: 10px 12px;
   color: var(--muted);
-  font: 10px 'DM Mono', monospace;
+  font: 10px var(--mono);
   overflow: hidden;
   text-overflow: ellipsis;
   border-bottom: 1px solid var(--line-soft);
   margin-bottom: 6px;
-}
-
-.gear-dropdown button {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
-  border: 0;
-  border-radius: 12px;
-  background: transparent;
-  color: var(--ink-2);
-  text-align: left;
-  font-size: 11px;
-}
-
-.gear-dropdown button:hover {
-  background: rgba(255, 255, 255, 0.12);
-  color: #fff;
-}
-
-.gear-dropdown button svg {
-  color: var(--accent);
 }
 
 @keyframes menu-in {
@@ -2274,7 +2372,10 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   to { opacity: 1; transform: translateY(0); }
 }
 
-/* Modal Dialogs - Expansive & Spacious Layout */
+/* =========================================================================
+   MODAL DIALOGS
+   ========================================================================= */
+
 .overlay {
   position: fixed;
   inset: 0;
@@ -2287,19 +2388,21 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   -webkit-backdrop-filter: blur(16px);
 }
 
+.dialog,
+.catalog-panel {
+  background: var(--panel-bg);
+  border: 1px solid rgba(255, 255, 255, 0.32);
+  border-radius: 28px;
+  box-shadow: var(--panel-shadow);
+  backdrop-filter: blur(32px);
+  -webkit-backdrop-filter: blur(32px);
+}
+
 .dialog {
   width: min(92vw, 980px);
   max-height: min(90vh, 880px);
   overflow-y: auto;
-  background: rgba(14, 22, 33, 0.94);
-  border: 1px solid rgba(255, 255, 255, 0.32);
-  border-radius: 28px;
-  box-shadow:
-    inset 0 1px 1px rgba(255, 255, 255, 0.5),
-    0 30px 100px rgba(0, 0, 0, 0.7);
   padding: 34px 40px;
-  backdrop-filter: blur(32px);
-  -webkit-backdrop-filter: blur(32px);
   display: grid;
   gap: 20px;
 }
@@ -2337,17 +2440,21 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   gap: 12px;
 }
 
+/* Fondo colorido: el widget-card de la vista previa necesita algo que
+   desenfocar/refractar, si no el cristal se ve plano. */
 .live-preview-box {
   padding: 24px;
   border-radius: 24px;
-  background: rgba(0, 0, 0, 0.35);
+  background:
+          radial-gradient(60% 80% at 15% 20%, rgba(110, 168, 255, 0.55), transparent 65%),
+          radial-gradient(55% 70% at 85% 80%, rgba(212, 163, 255, 0.4), transparent 65%),
+          radial-gradient(50% 60% at 70% 15%, rgba(147, 215, 161, 0.3), transparent 65%),
+          rgba(8, 14, 22, 0.85);
   border: 1.5px dashed rgba(255, 255, 255, 0.22);
   min-height: 200px;
   display: flex;
   align-items: center;
   justify-content: center;
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
   box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.4);
 }
 
@@ -2371,9 +2478,6 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 
 .dialog-heading .kicker, .catalog-header .kicker {
   margin: 0 0 6px;
-  color: var(--accent);
-  font: 9px 'DM Mono', monospace;
-  letter-spacing: 1px;
 }
 
 .dialog-heading h2, .catalog-header h2 {
@@ -2393,22 +2497,44 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   place-items: center;
 }
 
+.close-button:hover {
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+}
+
 .dialog label {
   display: grid;
   gap: 7px;
   color: var(--ink-2);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
 }
 
-.dialog input:not([type=checkbox]), .dialog select {
-  height: 40px;
+.dialog input:not([type=checkbox]),
+.dialog select,
+.dialog textarea {
   border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 12px;
   background: rgba(7, 14, 23, 0.5);
   padding: 0 12px;
   color: var(--ink);
   font-size: 12px;
+}
+
+.dialog input:not([type=checkbox]),
+.dialog select {
+  height: 40px;
+}
+
+.dialog textarea {
+  padding: 10px 12px;
+  resize: vertical;
+  line-height: 1.5;
+}
+
+.dialog select option {
+  background: #0e1621;
+  color: var(--ink);
 }
 
 .dialog .check-label {
@@ -2436,7 +2562,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   background: rgba(255, 255, 255, 0.1);
   color: #fff;
   padding: 10px 16px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   display: inline-flex;
   align-items: center;
@@ -2448,6 +2574,11 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .button:hover {
   border-color: rgba(255, 255, 255, 0.45);
   background: rgba(255, 255, 255, 0.2);
+}
+
+.button:disabled {
+  opacity: 0.6;
+  cursor: progress;
 }
 
 .button-primary {
@@ -2472,6 +2603,12 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   border-color: transparent;
 }
 
+/* =========================================================================
+   WIDGET CATALOG
+   (.catalog-panel comparte superficie con .dialog más arriba; antes no
+   tenía fondo y se veía transparente sobre el overlay)
+   ========================================================================= */
+
 .catalog-panel {
   width: min(95vw, 1320px);
   max-height: min(92vh, 920px);
@@ -2483,7 +2620,6 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   margin-bottom: 22px;
 }
 
-/* Category Tabs */
 .catalog-tabs {
   display: flex;
   gap: 10px;
@@ -2531,16 +2667,14 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   min-width: 0;
   padding: 16px;
   background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  border: 1px solid var(--inner-border);
   border-radius: 20px;
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  box-shadow: var(--inner-hi);
   transition: transform 0.15s, border-color 0.15s, background 0.15s;
 }
 
 .catalog-card:hover {
-  background: rgba(255, 255, 255, 0.09);
+  background: rgba(255, 255, 255, 0.1);
   border-color: rgba(255, 255, 255, 0.32);
   transform: translateY(-2px);
 }
@@ -2559,7 +2693,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   place-items: center;
   border-radius: 12px;
   background: rgba(110, 168, 255, 0.18);
-  color: #c6ddff;
+  color: #cfe2ff;
 }
 
 .catalog-badges {
@@ -2574,7 +2708,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   background: rgba(147, 215, 161, 0.18);
   border: 1px solid rgba(147, 215, 161, 0.35);
   color: var(--good);
-  font: 8px 'DM Mono', monospace;
+  font: 9px var(--mono);
 }
 
 .catalog-size {
@@ -2583,7 +2717,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   background: rgba(255, 255, 255, 0.08);
   border: 1px solid rgba(255, 255, 255, 0.15);
   color: var(--muted);
-  font: 9px 'DM Mono', monospace;
+  font: 10px var(--mono);
 }
 
 .catalog-card h3 {
@@ -2593,16 +2727,15 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 }
 
 .catalog-subtitle {
-  font-size: 10px;
+  font: 10px var(--mono);
   color: var(--accent);
-  font-family: 'DM Mono', monospace;
   margin-bottom: 8px;
 }
 
 .catalog-card p {
   flex: 1;
-  color: #bfccdb;
-  font-size: 10px;
+  color: #c8d4e2;
+  font-size: 11px;
   line-height: 1.5;
   margin: 0 0 14px;
 }
@@ -2615,11 +2748,14 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   padding-top: 16px;
   margin-top: 18px;
   border-top: 1px solid var(--line-soft);
-  color: #bfccdb;
-  font-size: 10px;
+  color: #c8d4e2;
+  font-size: 11px;
 }
 
-/* Login Page */
+/* =========================================================================
+   LOGIN
+   ========================================================================= */
+
 .login-page {
   min-height: 100vh;
   display: grid;
@@ -2634,20 +2770,22 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   background: rgba(17, 23, 33, 0.85);
   border: 1px solid rgba(255, 255, 255, 0.22);
   border-radius: 26px;
-  box-shadow: var(--shadow);
+  box-shadow: var(--shadow), inset 0 1px 1px rgba(255, 255, 255, 0.3);
   backdrop-filter: blur(28px);
+  -webkit-backdrop-filter: blur(28px);
 }
 
 .login-card .brand-lockup { margin-bottom: 40px; }
-.login-card .kicker { margin: 0 0 10px; color: var(--accent); font: 9px 'DM Mono', monospace; letter-spacing: 1px; }
+.login-card .kicker { margin: 0 0 10px; }
 .login-card h1 { font-size: 28px; line-height: 1.2; letter-spacing: -1px; margin: 0 0 10px; }
-.login-card label { display: grid; gap: 7px; color: var(--ink-2); font-size: 11px; margin-top: 16px; }
+.login-card label { display: grid; gap: 7px; color: var(--ink-2); font-size: 12px; margin-top: 16px; }
 .login-card input { height: 42px; padding: 0 12px; border: 1px solid rgba(255, 255, 255, 0.18); border-radius: 12px; background: rgba(8, 14, 22, 0.6); color: #fff; }
 .login-card > .button { width: 100%; margin-top: 24px; }
+.login-card .form-error { margin-top: 14px; }
 .loading-card { text-align: center; color: var(--muted); }
 
 /* =========================================================================
-   RESPONSIVE DESIGN
+   RESPONSIVE
    ========================================================================= */
 
 @media (max-width: 1050px) {
@@ -2658,6 +2796,9 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 }
 
 @media (max-width: 720px) {
+  :root {
+    --glass-blur: 8px; /* menos coste de GPU en móvil */
+  }
   .app-frame {
     height: auto;
     min-height: 100dvh;
@@ -2673,10 +2814,6 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
     gap: 10px;
     padding: 12px;
   }
-  .corner-menu {
-    top: 14px;
-    right: 14px;
-  }
   .widget-shell {
     grid-column: 1 / -1 !important;
     grid-row: auto !important;
@@ -2690,6 +2827,9 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   }
   .catalog-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .dialog {
+    padding: 24px 20px;
   }
   .catalog-panel {
     max-height: calc(100vh - 32px);
@@ -2723,9 +2863,20 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   }
 }
 
+/* Sin soporte de backdrop-filter: fondo sólido legible */
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  .widget-card, .gear-dropdown, .gear-button, .dialog, .catalog-panel, .catalog-card {
+  .widget-card, .gear-dropdown, .canvas-context-menu, .edit-dock-bar,
+  .corner-trigger-btn, .dialog, .catalog-panel {
     background: rgba(17, 25, 36, 0.95);
+  }
+}
+
+/* Usuarios que piden menos transparencia */
+@media (prefers-reduced-transparency: reduce) {
+  .widget-card {
+    background: rgba(22, 31, 43, 0.92);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
   }
 }
 

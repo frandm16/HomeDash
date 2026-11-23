@@ -529,6 +529,27 @@ function WidgetSettings({
             )}
 
             <div className="settings-section-divider"/>
+            <p className="kicker">APPEARANCE</p>
+            <label>Card Background
+              <select value={String(config.backgroundStyle ?? 'glass')} onChange={e => setConfig(prev => ({ ...prev, backgroundStyle: e.target.value }))}>
+                <option value="glass">Liquid Glass (default)</option>
+                <option value="transparent">Transparent (no background)</option>
+                <option value="solid">Solid Dark</option>
+                <option value="tinted">Tinted Accent</option>
+              </select>
+            </label>
+            <label>Accent / Tint Color
+              <select value={String(config.accentColor ?? 'default')} onChange={e => setConfig(prev => ({ ...prev, accentColor: e.target.value }))}>
+                <option value="default">Default Blue</option>
+                <option value="purple">Purple</option>
+                <option value="emerald">Emerald</option>
+                <option value="amber">Amber</option>
+                <option value="rose">Rose</option>
+                <option value="cyan">Cyan</option>
+              </select>
+            </label>
+
+            <div className="settings-section-divider"/>
             <p className="kicker">CLICK REDIRECTION (OPTIONAL)</p>
             <label>Redirect URL on click
               <input
@@ -752,29 +773,7 @@ function Dashboard({ user, onLogout }: { user: AuthUser; onLogout: () => void })
     Promise.all([fetchWidgets(profile.id), fetchBookmarks(profile.id)]).then(async ([result, bookmarkResult]) => {
       if (cancelled) return
       setBookmarks(bookmarkResult.bookmarks)
-      if (result.widgets.length) {
-        setWidgets(result.widgets)
-        return
-      }
-      const available = await fetchWidgetDefinitions().catch(() => ({ widgets: [] as ApiWidgetDefinition[] }))
-      const initial = ['search', 'bookmarks', 'notifications', 'homelab-performance'].flatMap(type => {
-        const definition = available.widgets.find(item => item.type === type)
-        return definition ? [{ definition, type }] : []
-      })
-      let cursorX = 0, cursorY = 0, rowHeight = 0
-      const created = await Promise.all(initial.map(({ definition, type }) => {
-        const width = Math.min(GRID_COLUMNS, definition.initialSize.w), height = definition.initialSize.h
-        if (cursorX + width > GRID_COLUMNS) {
-          cursorX = 0
-          cursorY += rowHeight
-          rowHeight = 0
-        }
-        const layout = { x: cursorX, y: cursorY, width, height }
-        cursorX += width
-        rowHeight = Math.max(rowHeight, height)
-        return createWidget(profile.id, type, definition.defaultConfiguration, layout).catch(() => null)
-      }))
-      if (!cancelled) setWidgets(created.filter((widget): widget is Widget => widget !== null))
+      if (!cancelled) setWidgets(result.widgets)
     }).catch(() => undefined)
     return () => { cancelled = true }
   }, [profile])
@@ -1068,6 +1067,21 @@ function Dashboard({ user, onLogout }: { user: AuthUser; onLogout: () => void })
           {enabledWidgets.map(widget => {
             const definition = widgetRegistry[widget.widgetType]
             const hasRedirect = Boolean(widget.configuration.redirectUrl) && !editing
+
+            const bgStyle = String(widget.configuration.backgroundStyle ?? 'glass')
+            const accentColor = String(widget.configuration.accentColor ?? 'default')
+            const ACCENT_MAP: Record<string, string> = {
+              default: '#6ea8ff',
+              purple: '#a78bfa',
+              emerald: '#34d399',
+              amber: '#fbbf24',
+              rose: '#fb7185',
+              cyan: '#22d3ee'
+            }
+            const widgetStyleVars: React.CSSProperties = {
+              ...(accentColor !== 'default' ? { '--accent': ACCENT_MAP[accentColor] ?? ACCENT_MAP.default, '--accent-soft': `${ACCENT_MAP[accentColor] ?? ACCENT_MAP.default}33` } as React.CSSProperties : {}),
+            }
+
             const props = {
               data,
               state: connection === 'offline' ? 'offline' as const : connection === 'stale' ? 'stale' as const : snapshot ? 'ready' as const : 'loading' as const,
@@ -1083,10 +1097,11 @@ function Dashboard({ user, onLogout }: { user: AuthUser; onLogout: () => void })
             return (
               <article
                 key={widget.id}
-                className={`widget-shell ${editing ? 'is-editing' : ''} ${draggingId === widget.id ? 'is-dragging' : ''} ${hasRedirect ? 'has-redirect' : ''}`}
+                className={`widget-shell ${editing ? 'is-editing' : ''} ${draggingId === widget.id ? 'is-dragging' : ''} ${hasRedirect ? 'has-redirect' : ''} widget-bg-${bgStyle}`}
                 style={{
                   gridColumn: `${widget.layout.x + 1} / span ${widget.layout.width}`,
-                  gridRow: `${widget.layout.y + 1} / span ${widget.layout.height}`
+                  gridRow: `${widget.layout.y + 1} / span ${widget.layout.height}`,
+                  ...widgetStyleVars
                 }}
                 onClick={event => {
                   if (editing) return

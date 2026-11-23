@@ -100,7 +100,7 @@ function LoginScreen({ onAuthenticated }: { onAuthenticated: (user: AuthUser) =>
   )
 }
 
-function BookmarkDialog({ bookmark, profileId, widgetId, onClose, onSaved }: { bookmark?: Bookmark; profileId: string; widgetId?: string; onClose: () => void; onSaved: (bookmark: Bookmark) => void }) {
+function BookmarkDialog({ bookmark, profileId, widgetId, nextSortOrder, onClose, onSaved }: { bookmark?: Bookmark; profileId: string; widgetId?: string; nextSortOrder?: number; onClose: () => void; onSaved: (bookmark: Bookmark) => void }) {
   const [name, setName] = useState(bookmark?.name ?? '')
   const [url, setUrl] = useState(bookmark?.url ?? '')
   const [category, setCategory] = useState(bookmark?.category ?? '')
@@ -126,7 +126,8 @@ function BookmarkDialog({ bookmark, profileId, widgetId, onClose, onSaved }: { b
             url,
             icon: icon.trim() || undefined,
             category: category.trim() || undefined,
-            ...(widgetId ? { widgetId } : {})
+            ...(widgetId ? { widgetId } : {}),
+            ...(nextSortOrder !== undefined ? { sortOrder: nextSortOrder } : {})
           })
       onSaved(result)
       onClose()
@@ -969,6 +970,32 @@ function Dashboard({ user, onLogout }: { user: AuthUser; onLogout: () => void })
     return next
   })
 
+  const reorderBookmarks = useCallback(async (orderedIds: string[]) => {
+    const orderMap = new Map(orderedIds.map((id, idx) => [id, idx]))
+    const previous = bookmarks
+    const updates: { id: string; sortOrder: number }[] = []
+
+    const next = bookmarks.map(item => {
+      const nextOrder = orderMap.get(item.id)
+      if (nextOrder === undefined) return item
+      if (item.sortOrder !== nextOrder) updates.push({ id: item.id, sortOrder: nextOrder })
+      return { ...item, sortOrder: nextOrder }
+    })
+    next.sort((a, b) => a.sortOrder - b.sortOrder)
+
+    setBookmarks(next)
+    writeCache({ bookmarks: next })
+
+    if (!updates.length) return
+    try {
+      await Promise.all(updates.map(u => updateBookmark(u.id, { sortOrder: u.sortOrder })))
+    } catch {
+      setBookmarks(previous)
+      writeCache({ bookmarks: previous })
+      setSaveState('error')
+    }
+  }, [bookmarks])
+
   const cellFromMetrics = (clientX: number, clientY: number, metrics: GridMetrics) => ({
     x: Math.max(0, Math.min(metrics.columns - 1, Math.floor((clientX - metrics.left) / (metrics.cellWidth + metrics.gapX)))),
     y: Math.max(0, Math.min(metrics.rows - 1, Math.floor((clientY - metrics.top) / (metrics.cellHeight + metrics.gapY))))
@@ -1194,7 +1221,8 @@ function Dashboard({ user, onLogout }: { user: AuthUser; onLogout: () => void })
               onConfigurationChange: (configuration: Record<string, unknown>) => updateConfiguration(widget, configuration),
               onBookmarkChange: () => setBookmarkDialog({ widgetId: widget.id }),
               onBookmarkDelete: removeBookmark,
-              onBookmarkEdit: (bookmark: Bookmark) => setBookmarkDialog({ bookmark, widgetId: widget.id })
+              onBookmarkEdit: (bookmark: Bookmark) => setBookmarkDialog({ bookmark, widgetId: widget.id }),
+              onBookmarkReorder: reorderBookmarks
             }
 
             return (
@@ -1312,6 +1340,13 @@ function Dashboard({ user, onLogout }: { user: AuthUser; onLogout: () => void })
         <BookmarkDialog
           profileId={profile.id}
           widgetId={bookmarkDialog.widgetId}
+          nextSortOrder={
+            bookmarkDialog.bookmark
+              ? undefined
+              : bookmarks
+                  .filter(b => b.widgetId === bookmarkDialog.widgetId)
+                  .reduce((max, b) => Math.max(max, b.sortOrder + 1), 0)
+          }
           bookmark={bookmarkDialog.bookmark}
           onClose={() => setBookmarkDialog(null)}
           onSaved={bookmarkSaved}

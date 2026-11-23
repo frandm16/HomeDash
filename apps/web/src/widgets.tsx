@@ -20,6 +20,7 @@ export type WidgetRenderProps = {
   onBookmarkChange?: () => void
   onBookmarkDelete?: (bookmark: Bookmark) => void
   onBookmarkEdit?: (bookmark: Bookmark) => void
+  onBookmarkReorder?: (orderedIds: string[]) => void
 }
 
 export type WidgetDefinition = {
@@ -301,19 +302,107 @@ function SingleBookmarkWidget({ data, editing, configuration }: WidgetRenderProp
   )
 }
 
-function BookmarksWidget({ widgetId, data, editing, configuration, onBookmarkChange, onBookmarkDelete, onBookmarkEdit }: WidgetRenderProps) {
+function BookmarksWidget({ widgetId, data, editing, configuration, onBookmarkChange, onBookmarkDelete, onBookmarkEdit, onBookmarkReorder }: WidgetRenderProps) {
   const bookmarkStyle = String(configuration?.bookmarkStyle ?? 'tiles')
   const iconSize = String(configuration?.iconSize ?? 'normal')
   const categoryFilter = String(configuration?.categoryFilter ?? 'all')
+  const [draggedId, setDraggedId] = React.useState<string | null>(null)
+  const [dragOverId, setDragOverId] = React.useState<string | null>(null)
 
-  const bookmarksToRender = React.useMemo(() => {
-    const widgetBookmarks = widgetId
-      ? data.bookmarks.filter(b => b.widgetId === widgetId)
-      : data.bookmarks
-    return categoryFilter === 'all'
-      ? widgetBookmarks
-      : widgetBookmarks.filter(b => (b.category || '').toLowerCase() === categoryFilter.toLowerCase())
-  }, [data.bookmarks, widgetId, categoryFilter])
+  const widgetBookmarks = React.useMemo(
+    () => (widgetId ? data.bookmarks.filter(b => b.widgetId === widgetId) : data.bookmarks),
+    [data.bookmarks, widgetId]
+  )
+
+  const bookmarksToRender = React.useMemo(
+    () =>
+      categoryFilter === 'all'
+        ? widgetBookmarks
+        : widgetBookmarks.filter(b => (b.category || '').toLowerCase() === categoryFilter.toLowerCase()),
+    [widgetBookmarks, categoryFilter]
+  )
+
+  const moveBookmark = (sourceId: string, targetId: string) => {
+    if (!sourceId || !targetId || sourceId === targetId) return
+    const list = [...widgetBookmarks]
+    const fromIndex = list.findIndex(b => b.id === sourceId)
+    const toIndex = list.findIndex(b => b.id === targetId)
+    if (fromIndex === -1 || toIndex === -1) return
+    const [moved] = list.splice(fromIndex, 1)
+    list.splice(toIndex, 0, moved)
+    onBookmarkReorder?.(list.map(b => b.id))
+  }
+
+  const stepBookmark = (bookmarkId: string, delta: -1 | 1) => {
+    const visibleIdx = bookmarksToRender.findIndex(b => b.id === bookmarkId)
+    const neighbor = bookmarksToRender[visibleIdx + delta]
+    if (!neighbor) return
+    moveBookmark(bookmarkId, neighbor.id)
+  }
+
+  const dragProps = (bookmarkId: string) =>
+    editing
+      ? {
+          draggable: true,
+          onDragStart: (e: React.DragEvent) => {
+            e.stopPropagation()
+            setDraggedId(bookmarkId)
+            e.dataTransfer.effectAllowed = 'move'
+            e.dataTransfer.setData('text/plain', bookmarkId)
+          },
+          onDragOver: (e: React.DragEvent) => {
+            if (!draggedId || draggedId === bookmarkId) return
+            e.preventDefault()
+            e.stopPropagation()
+            e.dataTransfer.dropEffect = 'move'
+            if (dragOverId !== bookmarkId) setDragOverId(bookmarkId)
+          },
+          onDragLeave: () => {
+            if (dragOverId === bookmarkId) setDragOverId(null)
+          },
+          onDrop: (e: React.DragEvent) => {
+            e.preventDefault()
+            e.stopPropagation()
+            const sourceId = draggedId || e.dataTransfer.getData('text/plain')
+            setDraggedId(null)
+            setDragOverId(null)
+            if (sourceId && sourceId !== bookmarkId) moveBookmark(sourceId, bookmarkId)
+          },
+          onDragEnd: () => {
+            setDraggedId(null)
+            setDragOverId(null)
+          }
+        }
+      : {}
+
+  const renderEditActions = (bookmark: Bookmark, index: number, total: number) => {
+    if (!editing) return null
+    const isVertical = bookmarkStyle === 'tiles'
+    return (
+      <div className="bookmark-edit-actions">
+        <button
+          type="button"
+          onClick={() => stepBookmark(bookmark.id, -1)}
+          disabled={index === 0}
+          aria-label="Move earlier"
+          title={isVertical ? 'Move up' : 'Move left'}
+        >
+          {isVertical ? '▲' : '‹'}
+        </button>
+        <button
+          type="button"
+          onClick={() => stepBookmark(bookmark.id, 1)}
+          disabled={index === total - 1}
+          aria-label="Move later"
+          title={isVertical ? 'Move down' : 'Move right'}
+        >
+          {isVertical ? '▼' : '›'}
+        </button>
+        <button type="button" onClick={() => onBookmarkEdit?.(bookmark)} aria-label="Edit" title="Edit">✎</button>
+        <button type="button" onClick={() => onBookmarkDelete?.(bookmark)} aria-label="Delete" title="Delete">×</button>
+      </div>
+    )
+  }
 
   return (
     <section className={`widget-card bookmarks-widget style-${bookmarkStyle} size-${iconSize}`}>
@@ -329,65 +418,51 @@ function BookmarksWidget({ widgetId, data, editing, configuration, onBookmarkCha
       )}
       {bookmarksToRender.length > 0 && (
         <div className={`bookmark-layout ${bookmarkStyle}`}>
-          {bookmarksToRender.map(bookmark => {
+          {bookmarksToRender.map((bookmark, index) => {
             let host = ''
             try { host = new URL(bookmark.url).hostname } catch { host = '' }
+            const stateClasses = `${editing ? 'is-editing-item' : ''} ${draggedId === bookmark.id ? 'is-dragging' : ''} ${dragOverId === bookmark.id ? 'is-drag-over' : ''}`
 
             if (bookmarkStyle === 'icons-only') {
               return (
-                <div className="bookmark-item icon-only-item" key={bookmark.id}>
-                  <a href={bookmark.url} target="_blank" rel="noreferrer" className="bookmark-icon-anchor" title={bookmark.name}>
+                <div className={`bookmark-item icon-only-item ${stateClasses}`} key={bookmark.id} {...dragProps(bookmark.id)}>
+                  <a href={bookmark.url} target="_blank" rel="noreferrer" className="bookmark-icon-anchor" title={bookmark.name} onClick={e => editing && e.preventDefault()}>
                     <BookmarkFavicon url={bookmark.url} icon={bookmark.icon} name={bookmark.name}/>
                     <span className="bookmark-floating-tooltip">{bookmark.name}</span>
                   </a>
-                  {editing && (
-                    <div className="bookmark-edit-actions">
-                      <button onClick={() => onBookmarkEdit?.(bookmark)} aria-label="Edit">✎</button>
-                      <button onClick={() => onBookmarkDelete?.(bookmark)} aria-label="Delete">×</button>
-                    </div>
-                  )}
+                  {renderEditActions(bookmark, index, bookmarksToRender.length)}
                 </div>
               )
             }
 
             if (bookmarkStyle === 'compact-chips') {
               return (
-                <div className="bookmark-item chip-item" key={bookmark.id}>
-                  <a href={bookmark.url} target="_blank" rel="noreferrer" className="bookmark-chip-anchor">
+                <div className={`bookmark-item chip-item ${stateClasses}`} key={bookmark.id} {...dragProps(bookmark.id)}>
+                  <a href={bookmark.url} target="_blank" rel="noreferrer" className="bookmark-chip-anchor" onClick={e => editing && e.preventDefault()}>
                     <BookmarkFavicon url={bookmark.url} icon={bookmark.icon} name={bookmark.name}/>
                     <span className="bookmark-chip-title">{bookmark.name}</span>
                   </a>
-                  {editing && (
-                    <div className="bookmark-edit-actions">
-                      <button onClick={() => onBookmarkEdit?.(bookmark)} aria-label="Edit">✎</button>
-                      <button onClick={() => onBookmarkDelete?.(bookmark)} aria-label="Delete">×</button>
-                    </div>
-                  )}
+                  {renderEditActions(bookmark, index, bookmarksToRender.length)}
                 </div>
               )
             }
 
             if (bookmarkStyle === 'dock') {
               return (
-                <div className="bookmark-item dock-item" key={bookmark.id}>
-                  <a href={bookmark.url} target="_blank" rel="noreferrer" className="bookmark-dock-anchor" title={bookmark.name}>
+                <div className={`bookmark-item dock-item ${stateClasses}`} key={bookmark.id} {...dragProps(bookmark.id)}>
+                  <a href={bookmark.url} target="_blank" rel="noreferrer" className="bookmark-dock-anchor" title={bookmark.name} onClick={e => editing && e.preventDefault()}>
                     <BookmarkFavicon url={bookmark.url} icon={bookmark.icon} name={bookmark.name}/>
                     <span className="bookmark-dock-label">{bookmark.name}</span>
                   </a>
-                  {editing && (
-                    <div className="bookmark-edit-actions">
-                      <button onClick={() => onBookmarkEdit?.(bookmark)} aria-label="Edit">✎</button>
-                      <button onClick={() => onBookmarkDelete?.(bookmark)} aria-label="Delete">×</button>
-                    </div>
-                  )}
+                  {renderEditActions(bookmark, index, bookmarksToRender.length)}
                 </div>
               )
             }
 
             // Default: 'tiles'
             return (
-              <div className="bookmark-tile" key={bookmark.id}>
-                <a href={bookmark.url} target="_blank" rel="noreferrer">
+              <div className={`bookmark-tile ${stateClasses}`} key={bookmark.id} {...dragProps(bookmark.id)}>
+                <a href={bookmark.url} target="_blank" rel="noreferrer" onClick={e => editing && e.preventDefault()}>
                   <BookmarkFavicon url={bookmark.url} icon={bookmark.icon} name={bookmark.name}/>
                   <span className="bookmark-copy">
                     <strong>{bookmark.name}</strong>
@@ -395,12 +470,7 @@ function BookmarksWidget({ widgetId, data, editing, configuration, onBookmarkCha
                   </span>
                   <b aria-hidden="true" className="tile-arrow">↗</b>
                 </a>
-                {editing && (
-                  <div className="bookmark-edit-actions">
-                    <button onClick={() => onBookmarkEdit?.(bookmark)} aria-label="Edit">✎</button>
-                    <button onClick={() => onBookmarkDelete?.(bookmark)} aria-label="Delete">×</button>
-                  </div>
-                )}
+                {renderEditActions(bookmark, index, bookmarksToRender.length)}
               </div>
             )
           })}

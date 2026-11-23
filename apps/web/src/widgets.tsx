@@ -121,7 +121,8 @@ function SearchWidget({ configuration }: WidgetRenderProps) {
   const providerKey = (String(configuration?.provider ?? 'google') as SearchProviderKey)
   const provider = SEARCH_PROVIDERS[providerKey] ?? SEARCH_PROVIDERS.google
   const searchStyle = String(configuration?.searchStyle ?? 'pill')
-  const showEngineIcon = configuration?.showEngineIcon !== false
+  const isCompact = searchStyle === 'compact' || searchStyle === 'minimal'
+  const showEngineIcon = configuration?.showEngineIcon !== false && !isCompact
 
   React.useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -140,6 +141,24 @@ function SearchWidget({ configuration }: WidgetRenderProps) {
     if (!value) return
     const target = configuration?.openInNewTab === false ? '_self' : '_blank'
     window.open(`${provider.url}${encodeURIComponent(value)}`, target, 'noopener,noreferrer')
+  }
+
+  if (isCompact) {
+    return (
+      <form className={`widget-card search-widget style-compact ${searchStyle}`} onSubmit={submit} role="search">
+        <svg className="search-leading-icon" aria-hidden="true" viewBox="0 0 24 24">
+          <circle cx="11" cy="11" r="7"/>
+          <path d="m20 20-4-4"/>
+        </svg>
+        <input
+          ref={inputRef}
+          value={query}
+          onChange={event => setQuery(event.target.value)}
+          placeholder={`Search ${provider.label}…`}
+          aria-label={`Search with ${provider.label}`}
+        />
+      </form>
+    )
   }
 
   return (
@@ -207,6 +226,11 @@ function BookmarkFavicon({ url, icon, name }: { url: string; icon?: string; name
 function BookmarksWidget({ data, state, editing, configuration, onBookmarkChange, onBookmarkDelete, onBookmarkEdit }: WidgetRenderProps) {
   const bookmarkStyle = String(configuration?.bookmarkStyle ?? 'tiles')
   const iconSize = String(configuration?.iconSize ?? 'normal')
+  const categoryFilter = String(configuration?.categoryFilter ?? 'all')
+
+  const bookmarksToRender = categoryFilter === 'all'
+    ? data.bookmarks
+    : data.bookmarks.filter(b => (b.category || '').toLowerCase() === categoryFilter.toLowerCase())
 
   return (
     <section className={`widget-card bookmarks-widget style-${bookmarkStyle} size-${iconSize}`}>
@@ -216,12 +240,14 @@ function BookmarksWidget({ data, state, editing, configuration, onBookmarkChange
         </div>
       )}
       <State state={state}/>
-      {state === 'ready' && !data.bookmarks.length && (
-        <p className="widget-empty">No bookmarks saved yet. Add your favorite links.</p>
+      {state === 'ready' && !bookmarksToRender.length && (
+        <p className="widget-empty">
+          {categoryFilter !== 'all' ? `No bookmarks in category "${categoryFilter}".` : 'No bookmarks saved yet. Add your favorite links.'}
+        </p>
       )}
-      {state === 'ready' && data.bookmarks.length > 0 && (
+      {state === 'ready' && bookmarksToRender.length > 0 && (
         <div className={`bookmark-layout ${bookmarkStyle}`}>
-          {data.bookmarks.map(bookmark => {
+          {bookmarksToRender.map(bookmark => {
             let host = ''
             try { host = new URL(bookmark.url).hostname } catch { host = '' }
 
@@ -428,35 +454,178 @@ function NotificationsWidget({ data, state, message, configuration }: WidgetRend
 }
 
 /* =========================================================================
-   PERFORMANCE & SERVICES WIDGETS
+   PERFORMANCE & HARDWARE METRICS WIDGET (STYLES: radial-gauges, time-series-graph, kpi-stats, horizontal-bars)
    ========================================================================= */
 
-function PerformanceWidget({ data, state, message }: WidgetRenderProps) {
-  const metrics = data.performance?.metrics ?? []
+function RadialGauge({ label, percent, detail, color = '#6ea8ff' }: { label: string; percent: number; detail?: string; color?: string }) {
+  const radius = 38
+  const stroke = 6
+  const normalizedRadius = radius - stroke * 2
+  const circumference = normalizedRadius * 2 * Math.PI
+  const strokeDashoffset = circumference - (Math.min(100, Math.max(0, percent)) / 100) * circumference
+
+  let statusColor = color
+  if (percent >= 85) statusColor = '#f08282'
+  else if (percent >= 70) statusColor = '#f2c276'
+
   return (
-    <section className="widget-card performance-widget">
+    <div className="radial-gauge-item" title={`${label}: ${percent}% (${detail || ''})`}>
+      <div className="radial-gauge-svg-wrap">
+        <svg height={radius * 2} width={radius * 2} className="radial-gauge-svg">
+          <circle
+            stroke="rgba(255, 255, 255, 0.12)"
+            fill="transparent"
+            strokeWidth={stroke}
+            r={normalizedRadius}
+            cx={radius}
+            cy={radius}
+          />
+          <circle
+            stroke={statusColor}
+            fill="transparent"
+            strokeWidth={stroke}
+            strokeDasharray={`${circumference} ${circumference}`}
+            style={{ strokeDashoffset }}
+            strokeLinecap="round"
+            r={normalizedRadius}
+            cx={radius}
+            cy={radius}
+            className="radial-gauge-progress"
+          />
+        </svg>
+        <div className="radial-gauge-center">
+          <strong>{percent}%</strong>
+        </div>
+      </div>
+      <span className="radial-gauge-label">{label}</span>
+      {detail && <small className="radial-gauge-detail">{detail}</small>}
+    </div>
+  )
+}
+
+function MiniSparkline({ data, stroke = '#6ea8ff', fill = 'rgba(110, 168, 255, 0.15)', height = 48 }: { data: number[]; stroke?: string; fill?: string; height?: number }) {
+  if (!data || data.length < 2) return null
+  const min = 0
+  const max = 100
+  const width = 240
+  const points = data.map((val, idx) => {
+    const x = (idx / (data.length - 1)) * width
+    const y = height - ((Math.min(max, Math.max(min, val)) - min) / (max - min)) * (height - 6) - 3
+    return `${x.toFixed(1)},${y.toFixed(1)}`
+  })
+  const polylineStr = points.join(' ')
+  const polygonStr = `0,${height} ${polylineStr} ${width},${height}`
+
+  return (
+    <div className="sparkline-container" style={{ height }}>
+      <svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" className="sparkline-svg">
+        <polygon points={polygonStr} fill={fill}/>
+        <polyline points={polylineStr} fill="none" stroke={stroke} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+      </svg>
+    </div>
+  )
+}
+
+function PerformanceWidget({ data, state, message, configuration }: WidgetRenderProps) {
+  const metrics = data.performance?.metrics ?? []
+  const history = data.performance?.history ?? []
+  const perfStyle = String(configuration?.perfStyle ?? 'radial-gauges')
+
+  const cpu = metrics.find(m => m.key === 'cpu')
+  const ram = metrics.find(m => m.key === 'ram')
+  const gpu = metrics.find(m => m.key === 'gpu')
+  const disk = metrics.find(m => m.key === 'storage')
+
+  const cpuPercent = cpu?.value ?? 0
+  const ramPercent = ram?.value ?? 0
+  const gpuPercent = gpu?.value ?? 0
+
+  const cpuHistory = history.map(h => h.cpu ?? 0)
+
+  return (
+    <section className={`widget-card performance-widget style-${perfStyle}`}>
       <State state={state} message={message}/>
-      {data.performance?.sourceState === 'not_configured' && (
-        <p className="widget-empty">Metrics source is not configured yet.</p>
-      )}
-      {state === 'ready' && data.performance?.sourceState !== 'not_configured' && (
-        metrics.length ? (
-          <div className="metrics-list">
-            {metrics.map(metric => (
-              <div className="metric-row" key={metric.key}>
-                <div className="metric-label">
-                  <span>{metric.label}</span>
-                  <strong>{metric.value == null ? '—' : `${Math.round(metric.value)}%`}</strong>
-                </div>
-                <div className="metric-track">
-                  <span style={{ width: `${Math.min(100, Math.max(0, metric.value ?? 0))}%` }}/>
-                </div>
+
+      {state === 'ready' && (
+        <>
+          {/* Style 1: Radial Gauges (Circular dials) */}
+          {perfStyle === 'radial-gauges' && (
+            <div className="perf-radial-grid">
+              <RadialGauge label="CPU" percent={cpuPercent} detail={cpu?.detail} color="#6ea8ff"/>
+              <RadialGauge label="RAM" percent={ramPercent} detail={ram?.detail} color="#93d7a1"/>
+              <RadialGauge label="GPU" percent={gpuPercent} detail={gpu?.detail} color="#d4a3ff"/>
+            </div>
+          )}
+
+          {/* Style 2: Time Series Chart / Graph */}
+          {perfStyle === 'time-series-graph' && (
+            <div className="perf-timeseries-view">
+              <div className="timeseries-legend">
+                <span className="legend-item cpu-legend">
+                  <i/> CPU: <strong>{cpuPercent}%</strong>
+                </span>
+                <span className="legend-item ram-legend">
+                  <i/> RAM: <strong>{ramPercent}%</strong>
+                </span>
+                {gpu && (
+                  <span className="legend-item gpu-legend">
+                    <i/> GPU: <strong>{gpuPercent}%</strong>
+                  </span>
+                )}
               </div>
-            ))}
-          </div>
-        ) : (
-          <p className="widget-empty">No metrics available.</p>
-        )
+              <div className="timeseries-chart-box">
+                <MiniSparkline data={cpuHistory} stroke="#6ea8ff" fill="rgba(110, 168, 255, 0.2)" height={80}/>
+              </div>
+              <div className="timeseries-footer">
+                <small>Host Activity · Real-time streaming</small>
+                {disk && <small>{disk.label}: {disk.detail}</small>}
+              </div>
+            </div>
+          )}
+
+          {/* Style 3: Minimal KPI Stat Tiles (Ideal for 1x1 or 2x1) */}
+          {perfStyle === 'kpi-stats' && (
+            <div className="perf-kpi-grid">
+              <div className="kpi-stat-card">
+                <span className="kpi-label">CPU</span>
+                <span className={`kpi-value ${cpuPercent > 80 ? 'warn' : ''}`}>{cpuPercent}%</span>
+              </div>
+              <div className="kpi-stat-card">
+                <span className="kpi-label">RAM</span>
+                <span className={`kpi-value ${ramPercent > 80 ? 'warn' : ''}`}>{ramPercent}%</span>
+              </div>
+              <div className="kpi-stat-card">
+                <span className="kpi-label">GPU</span>
+                <span className="kpi-value">{gpuPercent}%</span>
+              </div>
+            </div>
+          )}
+
+          {/* Style 4: Classic Horizontal Glass Meter Bars */}
+          {perfStyle === 'horizontal-bars' && (
+            <div className="metrics-list">
+              {metrics.map(metric => {
+                const val = metric.value ?? 0
+                return (
+                  <div className="metric-row" key={metric.key}>
+                    <div className="metric-label">
+                      <span>{metric.label}</span>
+                      <strong>{metric.detail ? `${metric.detail} · ` : ''}{val}%</strong>
+                    </div>
+                    <div className="metric-track">
+                      <span
+                        style={{
+                          width: `${Math.min(100, Math.max(0, val))}%`,
+                          background: val > 85 ? 'linear-gradient(90deg, #f2c276, #f08282)' : undefined
+                        }}
+                      />
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </>
       )}
     </section>
   )
@@ -553,9 +722,25 @@ export const widgetRegistry: Record<string, WidgetDefinition> = {
   'homelab-performance': {
     type: 'homelab-performance',
     version: 1,
-    defaultSize: { width: 2, height: 2 },
+    defaultSize: { width: 3, height: 2 },
     minSize: { width: 1, height: 1 },
-    configuration: {},
+    configuration: { perfStyle: 'radial-gauges' },
+    render: PerformanceWidget
+  },
+  'performance-graph': {
+    type: 'performance-graph',
+    version: 1,
+    defaultSize: { width: 4, height: 2 },
+    minSize: { width: 1, height: 1 },
+    configuration: { perfStyle: 'time-series-graph' },
+    render: PerformanceWidget
+  },
+  'performance-kpi': {
+    type: 'performance-kpi',
+    version: 1,
+    defaultSize: { width: 2, height: 1 },
+    minSize: { width: 1, height: 1 },
+    configuration: { perfStyle: 'kpi-stats' },
     render: PerformanceWidget
   },
   'service-status': {

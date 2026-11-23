@@ -11,6 +11,7 @@ import { pool } from './db.js'
 import * as dashboardRepository from './infrastructure/db/repositories/dashboard.js'
 import { createService, deleteService, listAllServices, listServices, updateService } from './infrastructure/db/repositories/services.js'
 import { checkServices } from './adapters/service-health.js'
+import { collectPerformanceSnapshot } from './adapters/performance.js'
 import { createDevelopmentSources, createSnapshotService } from './snapshot.js'
 import * as authService from './auth.js'
 import { recordAudit as defaultRecordAudit } from './infrastructure/audit.js'
@@ -217,15 +218,7 @@ export async function buildApp(dependencies: AppDependencies = {}): Promise<Fast
       return reply.code(502).send({ error: 'Dashboard sources unavailable' })
     }
   })
-  app.get('/api/v1/performance', async () => ({
-    metrics: [
-      { key: 'cpu', label: 'CPU', value: null, unit: '%', state: 'not_configured' },
-      { key: 'gpu', label: 'GPU', value: null, unit: '%', state: 'not_configured' },
-      { key: 'ram', label: 'RAM', value: null, unit: '%', state: 'not_configured' },
-    ],
-    generatedAt: new Date().toISOString(),
-    sourceState: 'not_configured',
-  }))
+  app.get('/api/v1/performance', async () => collectPerformanceSnapshot())
   app.get('/api/v1/services', async () => {
     const services = await listServices()
     const results = await checkServices(services.filter((service) => service.healthcheckUrl).map((service) => ({ id: service.id, url: service.healthcheckUrl! })))

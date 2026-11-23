@@ -103,6 +103,7 @@ function LoginScreen({ onAuthenticated }: { onAuthenticated: (user: AuthUser) =>
 function BookmarkDialog({ bookmark, profileId, onClose, onSaved }: { bookmark?: Bookmark; profileId: string; onClose: () => void; onSaved: (bookmark: Bookmark) => void }) {
   const [name, setName] = useState(bookmark?.name ?? '')
   const [url, setUrl] = useState(bookmark?.url ?? '')
+  const [category, setCategory] = useState(bookmark?.category ?? '')
   const [error, setError] = useState('')
 
   async function submit(event: FormEvent) {
@@ -110,7 +111,9 @@ function BookmarkDialog({ bookmark, profileId, onClose, onSaved }: { bookmark?: 
     try {
       const parsed = new URL(url)
       if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error()
-      const result = bookmark ? await updateBookmark(bookmark.id, { name, url }) : await createBookmark(profileId, { name, url })
+      const result = bookmark
+        ? await updateBookmark(bookmark.id, { name, url, category: category.trim() || undefined })
+        : await createBookmark(profileId, { name, url, category: category.trim() || undefined })
       onSaved(result)
       onClose()
     } catch {
@@ -120,7 +123,7 @@ function BookmarkDialog({ bookmark, profileId, onClose, onSaved }: { bookmark?: 
 
   return (
     <div className="overlay" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) onClose() }}>
-      <form className="dialog" onSubmit={submit}>
+      <form className="dialog bookmark-dialog" onSubmit={submit}>
         <div className="dialog-heading">
           <div>
             <p className="kicker">QUICK ACCESS</p>
@@ -129,10 +132,13 @@ function BookmarkDialog({ bookmark, profileId, onClose, onSaved }: { bookmark?: 
           <button type="button" className="close-button" onClick={onClose} aria-label="Close"><Icon name="close"/></button>
         </div>
         <label>Name
-          <input value={name} onChange={event => setName(event.target.value)} required/>
+          <input value={name} onChange={event => setName(event.target.value)} placeholder="e.g. Proxmox, GitHub, Home Assistant" required/>
         </label>
         <label>URL
-          <input type="url" value={url} onChange={event => setUrl(event.target.value)} required/>
+          <input type="url" value={url} onChange={event => setUrl(event.target.value)} placeholder="https://..." required/>
+        </label>
+        <label>Category (optional)
+          <input value={category} onChange={event => setCategory(event.target.value)} placeholder="e.g. Work, Homelab, Media"/>
         </label>
         {error && <p className="form-error">{error}</p>}
         <div className="dialog-actions">
@@ -144,113 +150,189 @@ function BookmarkDialog({ bookmark, profileId, onClose, onSaved }: { bookmark?: 
   )
 }
 
-function WidgetSettings({ widget, onClose, onSave }: { widget: Widget; onClose: () => void; onSave: (configuration: Record<string, unknown>) => void }) {
+function WidgetSettings({
+  widget,
+  data,
+  onClose,
+  onSave
+}: {
+  widget: Widget
+  data: WidgetData
+  onClose: () => void
+  onSave: (configuration: Record<string, unknown>) => void
+}) {
   const [config, setConfig] = useState<Record<string, unknown>>({ ...widget.configuration })
   const type = widget.widgetType
+  const definition = widgetRegistry[type]
 
   const isSearch = type.startsWith('search')
   const isBookmarks = type.startsWith('bookmarks')
   const isNotifications = type.startsWith('notifications')
+  const isPerformance = type.startsWith('performance') || type.startsWith('homelab-performance')
+
+  const availableCategories = useMemo(() => {
+    const set = new Set<string>()
+    data.bookmarks.forEach(b => {
+      if (b.category?.trim()) set.add(b.category.trim())
+    })
+    return Array.from(set)
+  }, [data.bookmarks])
 
   return (
     <div className="overlay" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) onClose() }}>
-      <section className="dialog">
+      <section className="dialog settings-dialog">
         <div className="dialog-heading">
           <div>
-            <p className="kicker">WIDGET CUSTOMIZATION</p>
+            <p className="kicker">CUSTOMIZE WIDGET · INSTANCE #{widget.id.slice(0, 6)}</p>
             <h2>{type.replace('-', ' ').toUpperCase()}</h2>
           </div>
           <button className="close-button" onClick={onClose} aria-label="Close"><Icon name="close"/></button>
         </div>
 
-        {isSearch && (
-          <>
-            <label>Search Provider
-              <select value={String(config.provider ?? 'google')} onChange={e => setConfig(prev => ({ ...prev, provider: e.target.value }))}>
-                <option value="google">Google</option>
-                <option value="duckduckgo">DuckDuckGo</option>
-                <option value="bing">Bing</option>
-                <option value="brave">Brave</option>
-                <option value="github">GitHub</option>
-                <option value="youtube">YouTube</option>
-              </select>
-            </label>
-            <label>Visual Style
-              <select value={String(config.searchStyle ?? (type === 'search-compact' ? 'compact' : 'pill'))} onChange={e => setConfig(prev => ({ ...prev, searchStyle: e.target.value }))}>
-                <option value="pill">Pill (Floating Glass)</option>
-                <option value="minimal">Minimal (Clean Border)</option>
-                <option value="compact">Compact (Dense)</option>
-                <option value="floating-glow">Neon Glow</option>
-              </select>
+        <div className="dialog-grid-layout">
+          {/* Controls Column */}
+          <div className="dialog-controls-col">
+            {isSearch && (
+              <>
+                <label>Search Provider
+                  <select value={String(config.provider ?? 'google')} onChange={e => setConfig(prev => ({ ...prev, provider: e.target.value }))}>
+                    <option value="google">Google</option>
+                    <option value="duckduckgo">DuckDuckGo</option>
+                    <option value="bing">Bing</option>
+                    <option value="brave">Brave</option>
+                    <option value="github">GitHub</option>
+                    <option value="youtube">YouTube</option>
+                  </select>
+                </label>
+                <label>Visual Style
+                  <select value={String(config.searchStyle ?? (type === 'search-compact' ? 'compact' : 'pill'))} onChange={e => setConfig(prev => ({ ...prev, searchStyle: e.target.value }))}>
+                    <option value="pill">Pill (Floating Glass Bar)</option>
+                    <option value="compact">Compact (Minimal Clean)</option>
+                    <option value="minimal">Minimal (Borderless Glass)</option>
+                    <option value="floating-glow">Neon Glow</option>
+                  </select>
+                </label>
+                {config.searchStyle !== 'compact' && config.searchStyle !== 'minimal' && (
+                  <label className="check-label">
+                    <input type="checkbox" checked={config.showEngineIcon !== false} onChange={e => setConfig(prev => ({ ...prev, showEngineIcon: e.target.checked }))}/>
+                    Show search engine logo badge
+                  </label>
+                )}
+                <label className="check-label">
+                  <input type="checkbox" checked={config.openInNewTab !== false} onChange={e => setConfig(prev => ({ ...prev, openInNewTab: e.target.checked }))}/>
+                  Open results in a new tab
+                </label>
+              </>
+            )}
+
+            {isBookmarks && (
+              <>
+                <label>Display Style
+                  <select value={String(config.bookmarkStyle ?? (type === 'bookmarks-icons' ? 'icons-only' : type === 'bookmarks-dock' ? 'dock' : 'tiles'))} onChange={e => setConfig(prev => ({ ...prev, bookmarkStyle: e.target.value }))}>
+                    <option value="icons-only">Icons Only (App Launchpad / No Text)</option>
+                    <option value="tiles">Cards / Tiles with Host</option>
+                    <option value="compact-chips">Compact Chips</option>
+                    <option value="dock">Dock (macOS Floating Glass Dock)</option>
+                  </select>
+                </label>
+                <label>Icon Scale
+                  <select value={String(config.iconSize ?? 'normal')} onChange={e => setConfig(prev => ({ ...prev, iconSize: e.target.value }))}>
+                    <option value="normal">Normal</option>
+                    <option value="large">Large</option>
+                  </select>
+                </label>
+                {availableCategories.length > 0 && (
+                  <label>Filter by Bookmark Category
+                    <select value={String(config.categoryFilter ?? 'all')} onChange={e => setConfig(prev => ({ ...prev, categoryFilter: e.target.value }))}>
+                      <option value="all">All categories ({data.bookmarks.length} links)</option>
+                      {availableCategories.map(cat => (
+                        <option key={cat} value={cat}>{cat}</option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+              </>
+            )}
+
+            {isNotifications && (
+              <>
+                <label>Notification Style
+                  <select value={String(config.notificationStyle ?? (type === 'notifications-badge' ? 'badge-only' : type === 'notifications-ticker' ? 'compact-ticker' : 'cards'))} onChange={e => setConfig(prev => ({ ...prev, notificationStyle: e.target.value }))}>
+                    <option value="cards">Glass Cards List</option>
+                    <option value="timeline">Vertical Timeline</option>
+                    <option value="compact-ticker">Compact Ticker (1-row stream)</option>
+                    <option value="badge-only">Status Badge Counter (1×1 Chip)</option>
+                  </select>
+                </label>
+                {config.notificationStyle !== 'badge-only' && (
+                  <label>Max items displayed
+                    <select value={Number(config.maxItems ?? 6)} onChange={e => setConfig(prev => ({ ...prev, maxItems: Number(e.target.value) }))}>
+                      <option value={3}>3 notifications</option>
+                      <option value={6}>6 notifications</option>
+                      <option value={10}>10 notifications</option>
+                    </select>
+                  </label>
+                )}
+              </>
+            )}
+
+            {isPerformance && (
+              <>
+                <label>Performance Visualization
+                  <select
+                    value={String(config.perfStyle ?? (type === 'performance-graph' ? 'time-series-graph' : type === 'performance-kpi' ? 'kpi-stats' : 'radial-gauges'))}
+                    onChange={e => setConfig(prev => ({ ...prev, perfStyle: e.target.value }))}
+                  >
+                    <option value="radial-gauges">Circular Radial Gauges (Dials)</option>
+                    <option value="time-series-graph">Time Series Graph / Sparkline</option>
+                    <option value="kpi-stats">KPI Stat Numbers (Compact)</option>
+                    <option value="horizontal-bars">Horizontal Meter Bars</option>
+                  </select>
+                </label>
+              </>
+            )}
+
+            <div className="settings-section-divider"/>
+            <p className="kicker">CLICK REDIRECTION (OPTIONAL)</p>
+            <label>Redirect URL on click
+              <input
+                type="url"
+                value={String(config.redirectUrl ?? '')}
+                onChange={e => setConfig(prev => ({ ...prev, redirectUrl: e.target.value }))}
+                placeholder="https://proxmox.lan:8006 or https://..."
+              />
             </label>
             <label className="check-label">
-              <input type="checkbox" checked={config.showEngineIcon !== false} onChange={e => setConfig(prev => ({ ...prev, showEngineIcon: e.target.checked }))}/>
-              Show search engine logo
+              <input
+                type="checkbox"
+                checked={config.redirectNewTab !== false}
+                onChange={e => setConfig(prev => ({ ...prev, redirectNewTab: e.target.checked }))}
+              />
+              Open redirection in a new tab
             </label>
-            <label className="check-label">
-              <input type="checkbox" checked={config.openInNewTab !== false} onChange={e => setConfig(prev => ({ ...prev, openInNewTab: e.target.checked }))}/>
-              Open results in a new tab
-            </label>
-          </>
-        )}
+          </div>
 
-        {isBookmarks && (
-          <>
-            <label>Display Style
-              <select value={String(config.bookmarkStyle ?? (type === 'bookmarks-icons' ? 'icons-only' : type === 'bookmarks-dock' ? 'dock' : 'tiles'))} onChange={e => setConfig(prev => ({ ...prev, bookmarkStyle: e.target.value }))}>
-                <option value="icons-only">Icons Only (No Text / App Launchpad)</option>
-                <option value="tiles">Cards / Tiles with Host</option>
-                <option value="compact-chips">Compact Chips</option>
-                <option value="dock">Dock (macOS Glass Dock)</option>
-              </select>
-            </label>
-            <label>Icon Scale
-              <select value={String(config.iconSize ?? 'normal')} onChange={e => setConfig(prev => ({ ...prev, iconSize: e.target.value }))}>
-                <option value="normal">Normal</option>
-                <option value="large">Large</option>
-              </select>
-            </label>
-          </>
-        )}
-
-        {isNotifications && (
-          <>
-            <label>Notification Style
-              <select value={String(config.notificationStyle ?? (type === 'notifications-badge' ? 'badge-only' : type === 'notifications-ticker' ? 'compact-ticker' : 'cards'))} onChange={e => setConfig(prev => ({ ...prev, notificationStyle: e.target.value }))}>
-                <option value="cards">Glass Cards List</option>
-                <option value="timeline">Vertical Timeline</option>
-                <option value="compact-ticker">Compact Ticker (1-row)</option>
-                <option value="badge-only">Status Badge Counter</option>
-              </select>
-            </label>
-            <label>Max items displayed
-              <select value={Number(config.maxItems ?? 6)} onChange={e => setConfig(prev => ({ ...prev, maxItems: Number(e.target.value) }))}>
-                <option value={3}>3 notifications</option>
-                <option value={6}>6 notifications</option>
-                <option value={10}>10 notifications</option>
-              </select>
-            </label>
-          </>
-        )}
-
-        <div className="settings-section-divider"/>
-        <p className="kicker">CLICK REDIRECTION (OPTIONAL)</p>
-        <label>Redirect URL on click
-          <input
-            type="url"
-            value={String(config.redirectUrl ?? '')}
-            onChange={e => setConfig(prev => ({ ...prev, redirectUrl: e.target.value }))}
-            placeholder="https://proxmox.lan:8006 or https://..."
-          />
-        </label>
-        <label className="check-label">
-          <input
-            type="checkbox"
-            checked={config.redirectNewTab !== false}
-            onChange={e => setConfig(prev => ({ ...prev, redirectNewTab: e.target.checked }))}
-          />
-          Open redirection in a new tab
-        </label>
+          {/* Live Preview Column */}
+          <div className="dialog-preview-col">
+            <p className="kicker">LIVE GLASS PREVIEW</p>
+            <div className="live-preview-box">
+              {definition && (
+                <WidgetRenderer
+                  definition={definition}
+                  props={{
+                    data,
+                    state: 'ready',
+                    editing: false,
+                    configuration: config
+                  }}
+                />
+              )}
+            </div>
+            <p className="subtle preview-hint">
+              This preview updates live. Changes will only apply to this specific widget instance.
+            </p>
+          </div>
+        </div>
 
         <div className="dialog-actions">
           <button className="button button-quiet" onClick={onClose}>Cancel</button>
@@ -375,7 +457,15 @@ function Dashboard({ user, onLogout }: { user: AuthUser; onLogout: () => void })
         setConnection('online')
       })
       .catch(() => setConnection('offline'))
-    return () => controller.abort()
+
+    const perfTimer = window.setInterval(() => {
+      fetchPerformance().then(setPerformance).catch(() => undefined)
+    }, 5000)
+
+    return () => {
+      controller.abort()
+      window.clearInterval(perfTimer)
+    }
   }, [])
 
   useEffect(() => {
@@ -794,8 +884,8 @@ function Dashboard({ user, onLogout }: { user: AuthUser; onLogout: () => void })
                     </button>
                     <strong>{definition?.type.replaceAll('-', ' ')}</strong>
                     <div className="widget-toolbar-actions">
-                      <button onClick={() => setSettingsWidget(widget)} aria-label="Widget settings" title="Settings">
-                        <Icon name="settings" size={14}/>
+                      <button onClick={() => setSettingsWidget(widget)} aria-label="Customize widget" title="Customize widget">
+                        <Icon name="edit" size={14}/>
                       </button>
                       <button className="remove-widget" onClick={() => void removeWidget(widget)} aria-label="Remove widget" title="Remove">
                         <Icon name="remove" size={13}/>
@@ -876,6 +966,7 @@ function Dashboard({ user, onLogout }: { user: AuthUser; onLogout: () => void })
       {settingsWidget && (
         <WidgetSettings
           widget={settingsWidget}
+          data={data}
           onClose={() => setSettingsWidget(null)}
           onSave={configuration => updateConfiguration(settingsWidget, configuration)}
         />
@@ -957,9 +1048,23 @@ const CATALOG_METADATA: Record<string, CatalogEntryMeta> = {
   },
   'homelab-performance': {
     category: 'system',
-    title: 'Homelab Performance',
-    subtitle: 'CPU · RAM · GPU',
-    description: 'Live hardware utilization metrics and performance status gauges.',
+    title: 'Hardware Dials',
+    subtitle: 'Circular Gauges',
+    description: 'Radial glass dials for CPU, RAM, and GPU percentage utilization.',
+    icon: 'activity'
+  },
+  'performance-graph': {
+    category: 'system',
+    title: 'Performance Graph',
+    subtitle: 'Live Sparkline Timeline',
+    description: 'Continuous time-series graph tracking activity and usage over time.',
+    icon: 'activity'
+  },
+  'performance-kpi': {
+    category: 'system',
+    title: 'Performance Numbers',
+    subtitle: 'Compact Stat Tiles',
+    description: 'Large minimal percentage stats for small 1-cell or 2-cell slots.',
     icon: 'activity'
   },
   'service-status': {

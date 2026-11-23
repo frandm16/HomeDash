@@ -19,6 +19,7 @@ const definitions: WidgetDefinition[] = [
   { type: 'bookmarks', version: 1, defaultConfiguration: { bookmarkStyle: 'tiles', iconSize: 'normal' }, minSize: { w: 1, h: 1 }, initialSize: { w: 3, h: 2 }, permissions: ['bookmark:read'] },
   { type: 'bookmarks-icons', version: 1, defaultConfiguration: { bookmarkStyle: 'icons-only', iconSize: 'normal' }, minSize: { w: 1, h: 1 }, initialSize: { w: 2, h: 2 }, permissions: ['bookmark:read'] },
   { type: 'bookmarks-dock', version: 1, defaultConfiguration: { bookmarkStyle: 'dock', iconSize: 'normal' }, minSize: { w: 1, h: 1 }, initialSize: { w: 4, h: 1 }, permissions: ['bookmark:read'] },
+  { type: 'single-bookmark', version: 1, defaultConfiguration: { bookmarkId: '', title: '', url: '', icon: '', subtitle: '', openInNewTab: true }, minSize: { w: 1, h: 1 }, initialSize: { w: 2, h: 2 }, permissions: ['bookmark:read'] },
 
   // Notifications
   { type: 'notifications', version: 1, defaultConfiguration: { notificationStyle: 'cards', maxItems: 6 }, minSize: { w: 1, h: 1 }, initialSize: { w: 3, h: 3 }, permissions: ['notification:read'], refreshIntervalMs: 30_000 },
@@ -30,6 +31,11 @@ const definitions: WidgetDefinition[] = [
   { type: 'performance-graph', version: 1, defaultConfiguration: { perfStyle: 'time-series-graph' }, minSize: { w: 1, h: 1 }, initialSize: { w: 4, h: 2 }, permissions: ['metrics:read'], refreshIntervalMs: 5_000 },
   { type: 'performance-kpi', version: 1, defaultConfiguration: { perfStyle: 'kpi-stats' }, minSize: { w: 1, h: 1 }, initialSize: { w: 2, h: 1 }, permissions: ['metrics:read'], refreshIntervalMs: 5_000 },
   { type: 'service-status', version: 1, defaultConfiguration: {}, minSize: { w: 1, h: 1 }, initialSize: { w: 3, h: 2 }, permissions: ['service:read'], refreshIntervalMs: 30_000 },
+
+  // Time & Productivity Utilities (Phase 1)
+  { type: 'clock-hero', version: 1, defaultConfiguration: { clockStyle: 'digital-modern', showSeconds: false, format24h: true }, minSize: { w: 1, h: 1 }, initialSize: { w: 3, h: 2 }, permissions: [] },
+  { type: 'countdown-event', version: 1, defaultConfiguration: { title: 'Target Event', targetDate: '', icon: '🎯', countdownStyle: 'hero-counter' }, minSize: { w: 1, h: 1 }, initialSize: { w: 3, h: 2 }, permissions: [] },
+  { type: 'sticky-note', version: 1, defaultConfiguration: { noteType: 'text', content: '', pinColor: 'blue' }, minSize: { w: 1, h: 1 }, initialSize: { w: 2, h: 2 }, permissions: [] },
 ]
 
 export function listWidgetDefinitions(): WidgetDefinition[] { return definitions }

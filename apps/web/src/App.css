@@ -225,20 +225,22 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 
 .widget-toolbar {
   position: absolute;
-  left: 10px;
-  right: 10px;
-  top: 10px;
-  height: 30px;
-  z-index: 5;
-  padding: 0 8px;
-  background: rgba(13, 21, 32, 0.82);
-  border: 1px solid rgba(226, 237, 255, 0.25);
+  left: 8px;
+  right: 8px;
+  top: 8px;
+  height: 28px;
+  z-index: 10;
+  padding: 0 6px;
+  background: rgba(13, 21, 32, 0.88);
+  border: 1px solid rgba(226, 237, 255, 0.28);
   border-radius: 12px;
   display: flex;
   align-items: center;
-  gap: 8px;
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  gap: 6px;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-sizing: border-box;
+  overflow: hidden;
 }
 
 .widget-toolbar > strong {
@@ -246,12 +248,17 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   color: var(--ink-2);
   text-transform: uppercase;
   flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   letter-spacing: 0.5px;
 }
 
 .drag-handle {
-  width: 24px;
-  height: 24px;
+  width: 22px;
+  height: 22px;
+  flex: none;
   display: grid;
   place-items: center;
   border: 0;
@@ -267,18 +274,21 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 
 .widget-toolbar-actions {
   display: flex;
-  gap: 4px;
+  align-items: center;
+  gap: 2px;
+  flex: none;
 }
 
 .widget-toolbar-actions button {
   border: 0;
   background: transparent;
   color: #d2dce8;
-  width: 24px;
-  height: 24px;
-  border-radius: 8px;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
   display: grid;
   place-items: center;
+  flex: none;
 }
 
 .widget-toolbar-actions button:hover {
@@ -775,6 +785,180 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   display: grid;
   place-items: center;
   padding: 0;
+}
+
+/* 5. SINGLE-BOOKMARK HERO SQUARE WIDGET */
+.single-bookmark-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 16px;
+  position: relative;
+  text-align: center;
+}
+
+.single-bookmark-card.is-clickable {
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.single-bookmark-card.is-clickable:hover {
+  transform: translateY(-3px) scale(1.02);
+  border-color: rgba(255, 255, 255, 0.5);
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, 0.7),
+    0 18px 45px rgba(0, 0, 0, 0.38),
+    0 0 30px rgba(110, 168, 255, 0.25);
+}
+
+.single-bookmark-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+}
+
+.single-bookmark-icon-hero {
+  width: 58px;
+  height: 58px;
+  border-radius: 18px;
+  display: grid;
+  place-items: center;
+  background: rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, 0.5),
+    0 8px 24px rgba(0, 0, 0, 0.28);
+  flex: none;
+  overflow: hidden;
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.single-bookmark-card.is-clickable:hover .single-bookmark-icon-hero {
+  transform: scale(1.1);
+}
+
+.single-bookmark-icon-hero .bookmark-icon {
+  width: 100%;
+  height: 100%;
+  background: transparent;
+}
+
+.single-bookmark-icon-hero .bookmark-favicon-img {
+  width: 36px;
+  height: 36px;
+}
+
+.single-bookmark-icon-hero .custom-emoji {
+  font-size: 28px;
+}
+
+.single-bookmark-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-width: 100%;
+}
+
+.single-bookmark-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.single-bookmark-host {
+  font: 9px 'DM Mono', monospace;
+  color: #a4b5cb;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.single-bookmark-arrow {
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.4);
+  transition: opacity 0.15s, transform 0.15s;
+}
+
+.single-bookmark-card.is-clickable:hover .single-bookmark-arrow {
+  color: #fff;
+  transform: translate(2px, -2px);
+}
+
+/* Form Styles for Bookmark Custom Icons */
+.bookmark-form-body {
+  display: grid;
+  gap: 14px;
+}
+
+.emoji-quick-picks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  padding: 8px 12px;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 14px;
+}
+
+.emoji-pick-btn {
+  font-size: 16px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 8px;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition: transform 0.15s, background 0.15s;
+}
+
+.emoji-pick-btn:hover {
+  background: rgba(255, 255, 255, 0.22);
+  transform: scale(1.15);
+}
+
+.emoji-pick-btn.selected {
+  background: var(--accent);
+  border-color: var(--accent);
+  transform: scale(1.1);
+}
+
+.emoji-clear-btn {
+  padding: 4px 10px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: var(--ink-2);
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.emoji-clear-btn:hover {
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+}
+
+.bookmark-preview-box {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.preview-tile-card {
+  max-width: 240px;
 }
 
 /* =========================================================================
@@ -1330,6 +1514,499 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 }
 .status-lamp.offline, .status-lamp.error { background: var(--bad); }
 .status-lamp.stale, .status-lamp.loading { background: var(--warn); }
+
+/* =========================================================================
+   CLOCK HERO WIDGET STYLES (DIGITAL, ANALOG, WORLD)
+   ========================================================================= */
+
+.clock-hero-widget {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  height: 100%;
+  padding: 12px;
+}
+
+/* Digital Modern */
+.digital-time-wrap {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 2px;
+}
+
+.digital-hours-mins {
+  font: 800 clamp(32px, 5.5vw, 68px) 'DM Mono', monospace;
+  color: #fff;
+  letter-spacing: -2px;
+  line-height: 1;
+  text-shadow: 0 4px 25px rgba(110, 168, 255, 0.45);
+}
+
+.digital-seconds {
+  font: 700 clamp(16px, 2.2vw, 28px) 'DM Mono', monospace;
+  color: var(--accent);
+  opacity: 0.85;
+}
+
+.digital-ampm {
+  font: 700 12px 'DM Mono', monospace;
+  color: #a4b5cb;
+  margin-left: 6px;
+  letter-spacing: 1px;
+}
+
+.digital-date-badge {
+  margin-top: 6px;
+  font: 600 11px 'DM Mono', monospace;
+  color: #c0d1e5;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+/* Analog Minimal */
+.analog-clock-dial {
+  width: min(100%, 140px);
+  height: min(100%, 140px);
+  max-height: 130px;
+  display: grid;
+  place-items: center;
+}
+
+.analog-clock-svg {
+  width: 100%;
+  height: 100%;
+}
+
+.analog-face {
+  fill: rgba(0, 0, 0, 0.2);
+  stroke: rgba(255, 255, 255, 0.28);
+  stroke-width: 2;
+}
+
+.analog-tick-major {
+  stroke: rgba(255, 255, 255, 0.8);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+}
+
+.analog-tick-minor {
+  stroke: rgba(255, 255, 255, 0.3);
+  stroke-width: 1.2;
+}
+
+.analog-hand {
+  stroke-linecap: round;
+}
+
+.analog-hour-hand {
+  stroke: #ffffff;
+  stroke-width: 3.5;
+}
+
+.analog-minute-hand {
+  stroke: var(--accent);
+  stroke-width: 2.2;
+}
+
+.analog-second-hand {
+  stroke: #f2c276;
+  stroke-width: 1.2;
+}
+
+.analog-pivot {
+  fill: var(--accent);
+}
+
+.analog-date-label {
+  margin-top: 6px;
+  font: 9px 'DM Mono', monospace;
+  color: #a4b5cb;
+  text-transform: uppercase;
+}
+
+/* World Clocks */
+.world-clocks-grid {
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  width: 100%;
+  height: 100%;
+}
+
+.world-clock-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+
+.world-clock-badge {
+  font: 8px 'DM Mono', monospace;
+  letter-spacing: 1px;
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.1);
+  color: #c7dfff;
+}
+
+.world-clock-time {
+  font: 800 24px 'DM Mono', monospace;
+  color: #fff;
+  letter-spacing: -1px;
+}
+
+.world-clock-col small {
+  font: 8px 'DM Mono', monospace;
+  color: #9cb0c7;
+}
+
+.world-clock-divider {
+  width: 1px;
+  height: 44px;
+  background: rgba(255, 255, 255, 0.18);
+}
+
+/* =========================================================================
+   COUNTDOWN EVENT WIDGET STYLES (HERO COUNTER, COMPACT, PROGRESS)
+   ========================================================================= */
+
+.countdown-widget {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  height: 100%;
+  padding: 14px;
+}
+
+.countdown-widget.empty-config,
+.countdown-widget.is-reached {
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 6px;
+}
+
+.countdown-icon-hero {
+  font-size: 36px;
+}
+
+.countdown-hint {
+  font-size: 11px;
+  color: var(--muted);
+  margin: 0;
+}
+
+.countdown-reached-badge {
+  padding: 4px 12px;
+  border-radius: 9999px;
+  background: rgba(147, 215, 161, 0.2);
+  border: 1px solid rgba(147, 215, 161, 0.4);
+  color: var(--good);
+  font: 700 11px 'DM Mono', monospace;
+}
+
+.countdown-header-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.countdown-icon-small {
+  font-size: 18px;
+}
+
+.countdown-event-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Hero Counter Boxes Grid */
+.countdown-boxes-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin: 10px 0;
+}
+
+.countdown-digit-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 4px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+
+.digit-num {
+  font: 800 clamp(18px, 2.8vw, 30px) 'DM Mono', monospace;
+  color: #fff;
+  letter-spacing: -1px;
+  line-height: 1;
+}
+
+.digit-unit {
+  font: 700 8px 'DM Mono', monospace;
+  color: #a4b5cb;
+  letter-spacing: 0.5px;
+  margin-top: 3px;
+}
+
+.countdown-target-label {
+  font: 8px 'DM Mono', monospace;
+  color: #9cb0c7;
+  text-align: right;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Compact Badge */
+.countdown-widget.style-compact-badge {
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+}
+
+.countdown-icon-badge {
+  font-size: 26px;
+  flex: none;
+}
+
+.countdown-compact-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.countdown-compact-title {
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.countdown-compact-days {
+  font: 9px 'DM Mono', monospace;
+  color: var(--accent);
+}
+
+.countdown-compact-days strong {
+  font-size: 13px;
+  color: #fff;
+}
+
+/* Progress Bar Style */
+.countdown-digits-strip {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 6px 0;
+}
+
+.strip-val {
+  font: 9px 'DM Mono', monospace;
+  color: #a4b5cb;
+}
+
+.strip-val strong {
+  font: 800 16px 'DM Mono', monospace;
+  color: #fff;
+  margin-right: 2px;
+}
+
+.countdown-progress-track {
+  height: 6px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.14);
+  overflow: hidden;
+}
+
+.countdown-progress-fill {
+  height: 100%;
+  border-radius: 6px;
+  background: linear-gradient(90deg, #6ea8ff, #93d7a1);
+}
+
+.countdown-progress-label {
+  display: flex;
+  justify-content: space-between;
+  font: 8px 'DM Mono', monospace;
+  color: #9cb0c7;
+  margin-top: 4px;
+}
+
+/* =========================================================================
+   STICKY NOTE & CHECKLIST WIDGET STYLES
+   ========================================================================= */
+
+.sticky-note-widget {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 14px;
+}
+
+.sticky-pin-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  flex: none;
+}
+
+.sticky-pin {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.sticky-pin.pin-blue { background: #6ea8ff; box-shadow: 0 0 8px #6ea8ff; }
+.sticky-pin.pin-emerald { background: #93d7a1; box-shadow: 0 0 8px #93d7a1; }
+.sticky-pin.pin-amber { background: #f2c276; box-shadow: 0 0 8px #f2c276; }
+.sticky-pin.pin-purple { background: #d4a3ff; box-shadow: 0 0 8px #d4a3ff; }
+
+.sticky-note-tag {
+  font: 700 9px 'DM Mono', monospace;
+  color: #a4b5cb;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+.sticky-note-textarea {
+  flex: 1;
+  width: 100%;
+  background: transparent;
+  border: 0;
+  outline: 0;
+  resize: none;
+  color: #fff;
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 1.5;
+  padding: 0;
+}
+
+.sticky-note-textarea::placeholder {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+/* Checklist Mode */
+.sticky-checklist-container {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  flex: 1;
+  min-height: 0;
+}
+
+.sticky-checklist-items {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-right: 4px;
+}
+
+.checklist-item-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+
+.checklist-item-row:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.custom-checkbox {
+  width: 16px;
+  height: 16px;
+  border-radius: 5px;
+  border: 1.5px solid rgba(255, 255, 255, 0.35);
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  font-weight: 800;
+  color: #0b131f;
+  flex: none;
+}
+
+.custom-checkbox.checked {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.checklist-item-text {
+  font-size: 11px;
+  color: #f1f5fb;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.checklist-item-row.is-done .checklist-item-text {
+  text-decoration: line-through;
+  color: #8c9eb5;
+}
+
+.checklist-del-btn {
+  background: transparent;
+  border: 0;
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 13px;
+  cursor: pointer;
+  padding: 0 4px;
+  border-radius: 4px;
+}
+
+.checklist-del-btn:hover {
+  color: var(--bad);
+}
+
+.checklist-empty {
+  font-size: 11px;
+  color: var(--muted);
+  text-align: center;
+  margin: auto;
+}
+
+.checklist-add-form {
+  margin-top: 8px;
+  flex: none;
+}
+
+.checklist-input {
+  width: 100%;
+  height: 28px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 8px;
+  color: #fff;
+  font-size: 11px;
+  padding: 0 8px;
+  outline: 0;
+}
+
+.checklist-input:focus {
+  border-color: var(--accent);
+}
 
 /* =========================================================================
    EMPTY STATE, CORNER MENU & OVERLAYS

@@ -7,7 +7,7 @@ import { checkServices } from './adapters/service-health.js'
 import { publishEvent } from './infrastructure/events.js'
 
 type SnapshotSources = {
-  notifications: NotificationCenterAdapter
+  notifications: NotificationCenterAdapter | null
 }
 
 type SnapshotOptions = {
@@ -66,15 +66,20 @@ export const createSnapshotService = (sources: SnapshotSources, options: Snapsho
   let inFlight: Promise<DashboardSnapshot> | null = null
 
   async function computeSnapshot(): Promise<DashboardSnapshot> {
+    const notificationsSource = sources.notifications
     const [notificationsResult, unreadResult, servicesOutcome] = await Promise.all([
-      sources.notifications.getNotifications().then(
-        value => ({ ok: true as const, value }),
-        () => ({ ok: false as const, value: [] as DashboardNotification[] })
-      ),
-      sources.notifications.getUnreadCount().then(
-        value => ({ ok: true as const, value }),
-        () => ({ ok: false as const, value: -1 })
-      ),
+      notificationsSource
+        ? notificationsSource.getNotifications().then(
+            value => ({ ok: true as const, value }),
+            () => ({ ok: false as const, value: [] as DashboardNotification[] })
+          )
+        : Promise.resolve({ ok: false as const, value: [] as DashboardNotification[] }),
+      notificationsSource
+        ? notificationsSource.getUnreadCount().then(
+            value => ({ ok: true as const, value }),
+            () => ({ ok: false as const, value: -1 })
+          )
+        : Promise.resolve({ ok: false as const, value: 0 }),
       (async () => {
         try {
           const configured = await listServices()
@@ -93,7 +98,7 @@ export const createSnapshotService = (sources: SnapshotSources, options: Snapsho
           }))
           return { services: mapped, state: 'ready' as const }
         } catch {
-          return { services: fallbackServices, state: 'offline' as const }
+          return { services: config.isProduction ? [] : fallbackServices, state: 'offline' as const }
         }
       })(),
     ])
@@ -102,7 +107,11 @@ export const createSnapshotService = (sources: SnapshotSources, options: Snapsho
     const unreadNotifications = unreadResult.ok
       ? unreadResult.value
       : notifications.filter((notification) => !notification.read).length
-    const notificationsReady = notificationsResult.ok || unreadResult.ok
+    const notificationsState = !notificationsSource
+      ? 'not_configured' as const
+      : (notificationsResult.ok || unreadResult.ok)
+        ? 'ready' as const
+        : 'offline' as const
 
     return {
       services: servicesOutcome.services,
@@ -110,7 +119,7 @@ export const createSnapshotService = (sources: SnapshotSources, options: Snapsho
       unreadNotifications,
       generatedAt: new Date().toISOString(),
       sourceStates: {
-        notifications: notificationsReady ? 'ready' : 'offline',
+        notifications: notificationsState,
         services: servicesOutcome.state,
       },
     }
@@ -160,7 +169,7 @@ export const createDevelopmentSources = (): SnapshotSources => {
   const readToken = process.env.NOTIFICATION_CENTER_READ_TOKEN
 
   if (!baseUrl) {
-    return { notifications: createFallbackAdapter() }
+    return { notifications: config.isProduction ? null : createFallbackAdapter() }
   }
 
   return {

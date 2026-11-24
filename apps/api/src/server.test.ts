@@ -42,3 +42,10 @@ test('snapshot service deduplicates concurrent calls and serves stale-while-reva
   assert.equal(calls, 1)
   assert.equal(cached.generatedAt, first.generatedAt)
 })
+
+test('snapshot service marks notifications as not_configured when no source is configured', async () => {
+  const snapshot = await createSnapshotService({ notifications: null }).getSnapshot()
+  assert.deepEqual(snapshot.notifications, [])
+  assert.equal(snapshot.unreadNotifications, 0)
+  assert.equal(snapshot.sourceStates?.notifications, 'not_configured')
+})

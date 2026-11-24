@@ -625,19 +625,20 @@ function NotificationsWidget({ data, state, message, configuration }: WidgetRend
    PERFORMANCE & HARDWARE METRICS WIDGET (STYLES: radial-gauges, time-series-graph, kpi-stats, horizontal-bars)
    ========================================================================= */
 
-function RadialGauge({ label, percent, detail, color = '#6ea8ff' }: { label: string; percent: number; detail?: string; color?: string }) {
+function RadialGauge({ label, percent, detail, color = '#6ea8ff' }: { label: string; percent: number | null; detail?: string; color?: string }) {
   const radius = 38
   const stroke = 6
   const normalizedRadius = radius - stroke * 2
   const circumference = normalizedRadius * 2 * Math.PI
-  const strokeDashoffset = circumference - (Math.min(100, Math.max(0, percent)) / 100) * circumference
+  const numericPercent = percent === null ? 0 : Math.min(100, Math.max(0, percent))
+  const strokeDashoffset = circumference - (numericPercent / 100) * circumference
 
-  let statusColor = color
-  if (percent >= 85) statusColor = '#f08282'
-  else if (percent >= 70) statusColor = '#f2c276'
+  let statusColor = percent === null ? 'rgba(255, 255, 255, 0.25)' : color
+  if (percent !== null && percent >= 85) statusColor = '#f08282'
+  else if (percent !== null && percent >= 70) statusColor = '#f2c276'
 
   return (
-    <div className="radial-gauge-item" title={`${label}: ${percent}% (${detail || ''})`}>
+    <div className="radial-gauge-item" title={`${label}: ${percent === null ? 'N/A' : `${percent}%`}${detail ? ` (${detail})` : ''}`}>
       <div className="radial-gauge-svg-wrap">
         <svg height={radius * 2} width={radius * 2} className="radial-gauge-svg">
           <circle
@@ -662,7 +663,7 @@ function RadialGauge({ label, percent, detail, color = '#6ea8ff' }: { label: str
           />
         </svg>
         <div className="radial-gauge-center">
-          <strong>{percent}%</strong>
+          <strong>{percent === null ? '—' : `${percent}%`}</strong>
         </div>
       </div>
       <span className="radial-gauge-label">{label}</span>
@@ -706,9 +707,10 @@ function PerformanceWidget({ data, state, message, configuration }: WidgetRender
 
   const cpuPercent = cpu?.value ?? 0
   const ramPercent = ram?.value ?? 0
-  const gpuPercent = gpu?.value ?? 0
+  const gpuAvailable = gpu?.state === 'ready' && typeof gpu.value === 'number'
+  const gpuPercent = gpuAvailable ? gpu.value : null
 
-  const cpuHistory = history.map(h => h.cpu ?? 0)
+  const cpuHistory = history.map(h => h.cpu).filter((val): val is number => typeof val === 'number')
 
   return (
     <section className={`widget-card performance-widget style-${perfStyle}`}>
@@ -721,7 +723,7 @@ function PerformanceWidget({ data, state, message, configuration }: WidgetRender
             <div className="perf-radial-grid">
               <RadialGauge label="CPU" percent={cpuPercent} detail={cpu?.detail} color="#6ea8ff"/>
               <RadialGauge label="RAM" percent={ramPercent} detail={ram?.detail} color="#93d7a1"/>
-              <RadialGauge label="GPU" percent={gpuPercent} detail={gpu?.detail} color="#d4a3ff"/>
+              <RadialGauge label="GPU" percent={gpuPercent} detail={gpu?.detail ?? 'Not configured'} color="#d4a3ff"/>
             </div>
           )}
 
@@ -735,14 +737,18 @@ function PerformanceWidget({ data, state, message, configuration }: WidgetRender
                 <span className="legend-item ram-legend">
                   <i/> RAM: <strong>{ramPercent}%</strong>
                 </span>
-                {gpu && (
+                {gpuAvailable && (
                   <span className="legend-item gpu-legend">
                     <i/> GPU: <strong>{gpuPercent}%</strong>
                   </span>
                 )}
               </div>
               <div className="timeseries-chart-box">
-                <MiniSparkline data={cpuHistory} stroke="#6ea8ff" fill="rgba(110, 168, 255, 0.2)" height={80}/>
+                {cpuHistory.length >= 2 ? (
+                  <MiniSparkline data={cpuHistory} stroke="#6ea8ff" fill="rgba(110, 168, 255, 0.2)" height={80}/>
+                ) : (
+                  <p className="widget-status">Collecting live samples…</p>
+                )}
               </div>
               <div className="timeseries-footer">
                 <small>Host Activity · Real-time streaming</small>
@@ -764,7 +770,7 @@ function PerformanceWidget({ data, state, message, configuration }: WidgetRender
               </div>
               <div className="kpi-stat-card">
                 <span className="kpi-label">GPU</span>
-                <span className="kpi-value">{gpuPercent}%</span>
+                <span className="kpi-value">{gpuPercent === null ? 'N/A' : `${gpuPercent}%`}</span>
               </div>
             </div>
           )}
@@ -773,18 +779,18 @@ function PerformanceWidget({ data, state, message, configuration }: WidgetRender
           {perfStyle === 'horizontal-bars' && (
             <div className="metrics-list">
               {metrics.map(metric => {
-                const val = metric.value ?? 0
+                const val = typeof metric.value === 'number' ? metric.value : null
                 return (
                   <div className="metric-row" key={metric.key}>
                     <div className="metric-label">
                       <span>{metric.label}</span>
-                      <strong>{metric.detail ? `${metric.detail} · ` : ''}{val}%</strong>
+                      <strong>{metric.detail ? `${metric.detail} · ` : ''}{val === null ? 'N/A' : `${val}%`}</strong>
                     </div>
                     <div className="metric-track">
                       <span
                         style={{
-                          width: `${Math.min(100, Math.max(0, val))}%`,
-                          background: val > 85 ? 'linear-gradient(90deg, #f2c276, #f08282)' : undefined
+                          width: `${val === null ? 0 : Math.min(100, Math.max(0, val))}%`,
+                          background: val !== null && val > 85 ? 'linear-gradient(90deg, #f2c276, #f08282)' : undefined
                         }}
                       />
                     </div>

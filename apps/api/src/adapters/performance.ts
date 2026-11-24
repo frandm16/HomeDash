@@ -107,43 +107,18 @@ async function getDiskMetric(): Promise<{ percent: number; detail: string }> {
   return cachedDiskMetric?.value ?? { percent: 45, detail: '45% used' }
 }
 
-// Simulated smooth GPU metric when no discrete GPU sensor is configured
-let simulatedGpu = 18
-function getGpuPercent(): number {
-  const jitter = Math.floor(Math.random() * 7) - 3
-  simulatedGpu = Math.min(85, Math.max(5, simulatedGpu + jitter))
-  return simulatedGpu
-}
-
-// Initialize history buffer with recent seed data so charts render immediately
-function initHistoryBuffer() {
-  if (historyBuffer.length > 0) return
-  const now = Date.now()
-  const baseRam = getRamMetric().percent
-  for (let i = 20; i >= 0; i--) {
-    const timestamp = new Date(now - i * 5000).toISOString()
-    const cpuVal = Math.min(100, Math.max(4, Math.round(15 + Math.sin(i * 0.5) * 8 + (Math.random() * 6 - 3))))
-    const ramVal = Math.min(100, Math.max(10, Math.round(baseRam + (Math.random() * 2 - 1))))
-    const gpuVal = Math.min(100, Math.max(2, Math.round(12 + Math.cos(i * 0.4) * 6)))
-    historyBuffer.push({ timestamp, cpu: cpuVal, ram: ramVal, gpu: gpuVal })
-  }
-}
-
-initHistoryBuffer()
-
 export async function collectPerformanceSnapshot(): Promise<PerformanceSnapshot> {
   const cpuPercent = calculateCpuPercent()
   const ram = getRamMetric()
   const disk = await getDiskMetric()
-  const gpuPercent = getGpuPercent()
   const nowIso = new Date().toISOString()
 
-  // Push to history buffer
+  // Push real sample to history buffer
   historyBuffer.push({
     timestamp: nowIso,
     cpu: cpuPercent,
     ram: ram.percent,
-    gpu: gpuPercent,
+    gpu: null,
   })
 
   if (historyBuffer.length > MAX_HISTORY_POINTS) {
@@ -170,10 +145,10 @@ export async function collectPerformanceSnapshot(): Promise<PerformanceSnapshot>
     {
       key: 'gpu',
       label: 'GPU',
-      value: gpuPercent,
+      value: null,
       unit: '%',
-      state: 'ready',
-      detail: 'GPU 0 · 48°C',
+      state: 'not_configured',
+      detail: 'No GPU sensor configured',
     },
     {
       key: 'storage',

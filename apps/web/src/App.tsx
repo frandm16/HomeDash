@@ -1,5 +1,5 @@
-import { lazy, memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { PointerEvent } from 'react'
+import { Component, lazy, memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { ErrorInfo, PointerEvent, ReactNode } from 'react'
 import {
   ApiError,
   consumeInitialBootstrap,
@@ -96,6 +96,42 @@ const WidgetRenderer = memo(function WidgetRenderer({ definition, props }: { def
   return <Widget {...props} />
 })
 
+class WidgetErrorBoundary extends Component<
+  { widgetType: string; children: ReactNode },
+  { hasError: boolean }
+> {
+  state = { hasError: false }
+
+  static getDerivedStateFromError(): { hasError: boolean } {
+    return { hasError: true }
+  }
+
+  componentDidCatch(error: Error, info: ErrorInfo): void {
+    console.error(`[HomeDash] Widget "${this.props.widgetType}" failed to render:`, error, info)
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <section className="widget-card widget-error-card" role="alert">
+          <p className="widget-status">
+            <i className="status-lamp offline"/>
+            This widget couldn&apos;t render.
+          </p>
+          <button
+            type="button"
+            className="button button-quiet widget-retry-btn"
+            onClick={() => this.setState({ hasError: false })}
+          >
+            Retry
+          </button>
+        </section>
+      )
+    }
+    return this.props.children
+  }
+}
+
 type GridMetrics = {
   left: number
   top: number
@@ -149,10 +185,27 @@ function Dashboard({
   const [connection, setConnection] = useState<'loading' | 'online' | 'stale' | 'offline'>(() =>
     initialPayload || initialCache.widgets?.length ? 'online' : 'loading'
   )
-  const [, setSaveState] = useState<ToastState>('saved')
+  const [saveState, setSaveState] = useState<ToastState>('saved')
+  const [toastMessage, setToastMessage] = useState<string | null>(null)
+  const toastTimer = useRef<number | undefined>(undefined)
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null)
   const [menuOpen, setMenuOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement | null>(null)
+
+  const showToast = useCallback((state: ToastState, message: string, durationMs?: number) => {
+    setSaveState(state)
+    setToastMessage(message)
+    if (toastTimer.current) window.clearTimeout(toastTimer.current)
+    if (durationMs) {
+      toastTimer.current = window.setTimeout(() => {
+        setToastMessage(null)
+      }, durationMs)
+    }
+  }, [])
+
+  useEffect(() => () => {
+    if (toastTimer.current) window.clearTimeout(toastTimer.current)
+  }, [])
 
   const saveTimer = useRef<number | undefined>(undefined)
   const saveQueue = useRef<Promise<unknown>>(Promise.resolve())
@@ -393,7 +446,7 @@ function Dashboard({
   const saveWidgets = useCallback((next: Widget[]) => {
     setWidgets(next)
     writeCache({ widgets: next })
-    setSaveState('saving')
+    showToast('saving', 'Saving changes…')
     if (saveTimer.current) window.clearTimeout(saveTimer.current)
     saveTimer.current = window.setTimeout(() => {
       const toSave = next.filter(widget => !deletedWidgetIdsRef.current.has(widget.id))
@@ -408,10 +461,10 @@ function Dashboard({
           writeCache({ widgets: updated })
           return updated
         })
-        setSaveState('saved')
-      }).catch(() => setSaveState('error'))
+        showToast('saved', 'Changes saved', 1800)
+      }).catch(() => showToast('error', 'Could not save layout changes', 4500))
     }, 450)
-  }, [])
+  }, [showToast])
 
   const addWidget = async (definition: ApiWidgetDefinition) => {
     if (!profile) return
@@ -436,8 +489,9 @@ function Dashboard({
       })
       setShowCatalog(false)
       setSelectedSlot(null)
+      showToast('saved', 'Widget added', 1800)
     } catch {
-      setSaveState('error')
+      showToast('error', 'Could not add widget', 4500)
     }
   }
 
@@ -454,11 +508,12 @@ function Dashboard({
         writeCache({ bookmarks: nextBookmarks })
         return nextBookmarks
       })
+      showToast('saved', 'Widget removed', 1800)
     } catch {
       deletedWidgetIdsRef.current.delete(widget.id)
       setWidgets(previousWidgets)
       writeCache({ widgets: previousWidgets })
-      setSaveState('error')
+      showToast('error', 'Could not remove widget', 4500)
     }
   }
 
@@ -479,10 +534,11 @@ function Dashboard({
         writeCache({ bookmarks: next })
         return next
       })
+      showToast('saved', 'Bookmark removed', 1800)
     } catch {
-      setSaveState('error')
+      showToast('error', 'Could not remove bookmark', 4500)
     }
-  }, [])
+  }, [showToast])
 
   const bookmarkSaved = (saved: Bookmark) => setBookmarks(current => {
     const next = bookmarkDialog?.bookmark ? current.map(item => item.id === saved.id ? saved : item) : [...current, saved]
@@ -512,9 +568,9 @@ function Dashboard({
     } catch {
       setBookmarks(previous)
       writeCache({ bookmarks: previous })
-      setSaveState('error')
+      showToast('error', 'Could not reorder bookmarks', 4500)
     }
-  }, [bookmarks])
+  }, [bookmarks, showToast])
 
   const cellFromMetrics = (clientX: number, clientY: number, metrics: GridMetrics) => ({
     x: Math.max(0, Math.min(metrics.columns - 1, Math.floor((clientX - metrics.left) / (metrics.cellWidth + metrics.gapX)))),
@@ -805,7 +861,11 @@ function Dashboard({
                     </div>
                   </div>
                 )}
-                {definition && <WidgetRenderer definition={definition} props={props}/>}
+                {definition && (
+                  <WidgetErrorBoundary key={`${widget.id}:${widget.updatedAt ?? ''}`} widgetType={widget.widgetType}>
+                    <WidgetRenderer definition={definition} props={props}/>
+                  </WidgetErrorBoundary>
+                )}
                 {hasRedirect && <span className="redirect-hint-arrow" aria-hidden="true" title={`Redirects to ${widget.configuration.redirectUrl}`}>↗</span>}
                 {editing && ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'].map(edge => (
                   <span
@@ -854,6 +914,27 @@ function Dashboard({
             />
           )}
         </section>
+      )}
+
+      {toastMessage && (
+        <div
+          className={`save-toast state-${saveState}`}
+          role={saveState === 'error' ? 'alert' : 'status'}
+          aria-live="polite"
+        >
+          <span className="save-toast-dot" aria-hidden="true"/>
+          <span>{toastMessage}</span>
+          {saveState === 'error' && (
+            <button
+              type="button"
+              className="save-toast-dismiss"
+              onClick={() => setToastMessage(null)}
+              aria-label="Dismiss notification"
+            >
+              ×
+            </button>
+          )}
+        </div>
       )}
 
       <Suspense fallback={null}>

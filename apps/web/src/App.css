@@ -2523,3 +2523,76 @@ select:focus-visible, textarea:focus-visible {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* =========================================================================
+   SAVE / ERROR TOAST & WIDGET ERROR BOUNDARY
+   ========================================================================= */
+
+.save-toast {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 60;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #f3f7ff;
+  background: rgba(17, 25, 36, 0.78);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35);
+  -webkit-backdrop-filter: blur(18px);
+  backdrop-filter: blur(18px);
+}
+
+.save-toast-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent, #6ea8ff);
+  flex: none;
+}
+
+.save-toast.state-saved .save-toast-dot {
+  background: var(--good, #93d7a1);
+}
+
+.save-toast.state-error {
+  border-color: rgba(240, 130, 130, 0.45);
+  background: rgba(45, 18, 22, 0.86);
+}
+
+.save-toast.state-error .save-toast-dot {
+  background: var(--bad, #f08282);
+}
+
+.save-toast-dismiss {
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 15px;
+  line-height: 1;
+  padding: 0 2px;
+  cursor: pointer;
+}
+
+.save-toast-dismiss:hover {
+  color: #fff;
+}
+
+.widget-error-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  text-align: center;
+}
+
+.widget-retry-btn {
+  padding: 5px 12px;
+  font-size: 12px;
+}

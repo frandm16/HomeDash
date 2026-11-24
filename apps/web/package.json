@@ -11,6 +11,7 @@
     "perf": "node scripts/perf-benchmark.mjs"
   },
   "dependencies": {
+    "preact": "^11.2.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1"
   },

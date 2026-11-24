@@ -1,21 +1,19 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { FormEvent, PointerEvent, ReactNode } from 'react'
+import { lazy, memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { PointerEvent } from 'react'
 import {
   ApiError,
   consumeInitialBootstrap,
-  createBookmark,
-  createWidget,
   deleteBookmark,
   deleteWidget,
   fetchBootstrap,
   fetchDashboard,
   fetchPerformance,
   fetchWidgetDefinitions,
-  login,
   logout,
   openEvents,
   updateBookmark,
   updateWidget,
+  createWidget,
   type AuthUser,
   type Bookmark,
   type BootstrapPayload,
@@ -27,586 +25,17 @@ import {
   type WidgetDefinition as ApiWidgetDefinition
 } from './api'
 import { findOpenLayout, GRID_COLUMNS, GRID_ROWS, moveWidget } from './grid'
-import { BookmarkFavicon, widgetRegistry, type WidgetData, type WidgetRenderProps } from './widgets'
+import { Icon } from './Icon'
+import { widgetRegistry, type WidgetData, type WidgetRenderProps } from './widgets'
 import './App.css'
 
 type ToastState = 'saved' | 'saving' | 'error'
-type IconName = 'grid' | 'edit' | 'check' | 'plus' | 'search' | 'settings' | 'move' | 'resize' | 'remove' | 'close' | 'arrow' | 'bookmark' | 'bell' | 'activity' | 'logout' | 'gear'
 
-function Icon({ name, size = 16 }: { name: IconName; size?: number }) {
-  const paths: Record<IconName, ReactNode> = {
-    grid: <><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></>,
-    edit: <><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L9 17l-4 1 1-4Z"/></>,
-    check: <path d="m5 12 4 4L19 6"/>,
-    plus: <path d="M12 5v14M5 12h14"/>,
-    search: <><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></>,
-    settings: <><circle cx="12" cy="12" r="3"/><path d="m19.4 15 .1.1 1.1.9-1.1 1.9-1.3-.5a8 8 0 0 1-1.6.9l-.2 1.4h-2.2l-.2-1.4a8 8 0 0 1-1.7-.9l-1.3.5-1.1-1.9 1.1-.9a7 7 0 0 1 0-1.9l-1.1-.9 1.1-1.9 1.3.5a8 8 0 0 1 1.7-.9l.2-1.4h2.2l.2 1.4a8 8 0 0 1 1.6.9l1.3-.5 1.1 1.9-1.1.9a7 7 0 0 1-.1 1.8Z"/></>,
-    move: <><path d="M12 2v20M2 12h20M12 2l-3 3m3-3 3 3M12 22l-3-3m3 3 3-3M2 12l3-3m-3 3 3 3M22 12l-3-3m3 3-3 3"/></>,
-    resize: <><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M3 16v3a2 2 0 0 0 2 2h3M21 16v3a2 2 0 0 1-2 2h-3"/></>,
-    remove: <><path d="M3 6h18M8 6V4h8v2m3 0-1 14H6L5 6m4 4v6m6-6v6"/></>,
-    close: <path d="m18 6-12 12M6 6l12 12"/>,
-    arrow: <><path d="M7 17 17 7M7 7h10v10"/></>,
-    bookmark: <path d="M6 4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18l-6-4-6 4z"/>,
-    bell: <><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21h4"/></>,
-    activity: <path d="M3 12h4l3-9 4 18 3-9h4"/>,
-    logout: <><path d="M10 17l5-5-5-5M15 12H3"/><path d="M12 3h6a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-6"/></>,
-    gear: <><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-1.7 2.9-.2-.1a1.7 1.7 0 0 0-1.9.2 1.7 1.7 0 0 0-.8 1.5v.3H9v-.3a1.7 1.7 0 0 0-1.1-1.6 1.7 1.7 0 0 0-1.8.2l-.2.1-1.7-2.9.2-.1a1.7 1.7 0 0 0 .7-1.7 1.7 1.7 0 0 0-1.2-1.3l-.3-.1v-3.4l.3-.1a1.7 1.7 0 0 0 1.2-1.3 1.7 1.7 0 0 0-.7-1.7l-.2-.1 1.7-2.9.2.1a1.7 1.7 0 0 0 1.8.2A1.7 1.7 0 0 0 9 3.6v-.3h6.2v.3a1.7 1.7 0 0 0 .8 1.5 1.7 1.7 0 0 0 1.9.2l.2-.1 1.7 2.9-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.4 1l.2.1v3.4l-.2.1a1.7 1.7 0 0 0-1.4 1z"/></>
-  }
-  return <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">{paths[name]}</svg>
-}
-
-function LoginScreen({ onAuthenticated }: { onAuthenticated: (user: AuthUser) => void }) {
-  const [username, setUsername] = useState('')
-  const [password, setPassword] = useState('')
-  const [error, setError] = useState('')
-  const [loading, setLoading] = useState(false)
-
-  async function submit(event: FormEvent) {
-    event.preventDefault()
-    setError('')
-    setLoading(true)
-    try {
-      const result = await login(username, password)
-      onAuthenticated(result.user)
-    } catch {
-      setError('Incorrect username or password.')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  return (
-    <main className="login-page">
-      <form onSubmit={submit} className="login-card">
-        <div className="brand-lockup">
-          <span className="brand-symbol"><Icon name="grid" size={17}/></span>
-          <span>HOMEDASH<small>PRIVATE HOMELAB</small></span>
-        </div>
-        <p className="kicker">PRIVATE ACCESS</p>
-        <h1>Your homelab,<br/>in one place.</h1>
-        <p className="subtle">Sign in to open your dashboard.</p>
-        <label>Username
-          <input autoComplete="username" value={username} onChange={event => setUsername(event.target.value)} required/>
-        </label>
-        <label>Password
-          <input type="password" autoComplete="current-password" value={password} onChange={event => setPassword(event.target.value)} required/>
-        </label>
-        {error && <p className="form-error" role="alert">{error}</p>}
-        <button className="button button-primary" disabled={loading}>
-          {loading ? 'Checking…' : 'Sign in'}<Icon name="arrow" size={14}/>
-        </button>
-      </form>
-    </main>
-  )
-}
-
-function BookmarkDialog({ bookmark, profileId, widgetId, nextSortOrder, onClose, onSaved }: { bookmark?: Bookmark; profileId: string; widgetId?: string; nextSortOrder?: number; onClose: () => void; onSaved: (bookmark: Bookmark) => void }) {
-  const [name, setName] = useState(bookmark?.name ?? '')
-  const [url, setUrl] = useState(bookmark?.url ?? '')
-  const [category, setCategory] = useState(bookmark?.category ?? '')
-  const [icon, setIcon] = useState(bookmark?.icon ?? '')
-  const [error, setError] = useState('')
-
-  const PRESET_EMOJIS = ['🌐', '🚀', '💻', '🏠', '📦', '📊', '⚡', '🔒', '🎬', '🎮', '⚙️', '📁', '🐳', '🛡️', '📈', '🗄️']
-
-  async function submit(event: FormEvent) {
-    event.preventDefault()
-    try {
-      const parsed = new URL(url)
-      if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error()
-      const result = bookmark
-        ? await updateBookmark(bookmark.id, {
-            name,
-            url,
-            icon: icon.trim() || undefined,
-            category: category.trim() || undefined
-          })
-        : await createBookmark(profileId, {
-            name,
-            url,
-            icon: icon.trim() || undefined,
-            category: category.trim() || undefined,
-            ...(widgetId ? { widgetId } : {}),
-            ...(nextSortOrder !== undefined ? { sortOrder: nextSortOrder } : {})
-          })
-      onSaved(result)
-      onClose()
-    } catch {
-      setError('Enter a name and a valid http(s) URL.')
-    }
-  }
-
-  return (
-    <div className="overlay" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) onClose() }}>
-      <form className="dialog bookmark-dialog" onSubmit={submit}>
-        <div className="dialog-heading">
-          <div>
-            <p className="kicker">QUICK ACCESS</p>
-            <h2>{bookmark ? 'Edit bookmark' : 'Add bookmark'}</h2>
-          </div>
-          <button type="button" className="close-button" onClick={onClose} aria-label="Close"><Icon name="close"/></button>
-        </div>
-
-        <div className="bookmark-form-body">
-          <label>Name
-            <input value={name} onChange={event => setName(event.target.value)} placeholder="e.g. Proxmox, GitHub, Home Assistant" required/>
-          </label>
-
-          <label>URL
-            <input type="url" value={url} onChange={event => setUrl(event.target.value)} placeholder="https://..." required/>
-          </label>
-
-          <label>Custom Icon / Emoji (optional)
-            <input
-              value={icon}
-              onChange={event => setIcon(event.target.value)}
-              placeholder="Paste emoji (e.g. 🚀) or custom image URL, or leave empty for auto-favicon"
-            />
-          </label>
-
-          <div className="emoji-quick-picks">
-            {PRESET_EMOJIS.map(item => (
-              <button
-                key={item}
-                type="button"
-                className={`emoji-pick-btn ${icon === item ? 'selected' : ''}`}
-                onClick={() => setIcon(item)}
-              >
-                {item}
-              </button>
-            ))}
-            {icon && (
-              <button
-                type="button"
-                className="emoji-clear-btn"
-                onClick={() => setIcon('')}
-                title="Use automatic website favicon"
-              >
-                Auto Favicon
-              </button>
-            )}
-          </div>
-
-          <label>Category (optional)
-            <input value={category} onChange={event => setCategory(event.target.value)} placeholder="e.g. Work, Homelab, Media"/>
-          </label>
-
-          <div className="bookmark-preview-box">
-            <p className="kicker">LIVE PREVIEW</p>
-            <div className="bookmark-tile preview-tile-card">
-              <a onClick={e => e.preventDefault()} href="#preview">
-                <BookmarkFavicon url={url} icon={icon} name={name || 'Bookmark'}/>
-                <span className="bookmark-copy">
-                  <strong>{name || 'Bookmark Name'}</strong>
-                  <small>{category || (url ? (() => { try { return new URL(url).hostname } catch { return '' } })() : 'domain.com')}</small>
-                </span>
-                <b aria-hidden="true" className="tile-arrow">↗</b>
-              </a>
-            </div>
-          </div>
-        </div>
-
-        {error && <p className="form-error">{error}</p>}
-        <div className="dialog-actions">
-          <button type="button" className="button button-quiet" onClick={onClose}>Cancel</button>
-          <button className="button button-primary">Save bookmark</button>
-        </div>
-      </form>
-    </div>
-  )
-}
-
-function WidgetSettings({
-  widget,
-  data,
-  onClose,
-  onSave
-}: {
-  widget: Widget
-  data: WidgetData
-  onClose: () => void
-  onSave: (configuration: Record<string, unknown>) => void
-}) {
-  const [config, setConfig] = useState<Record<string, unknown>>({ ...widget.configuration })
-  const type = widget.widgetType
-  const definition = widgetRegistry[type]
-
-  const isSearch = type.startsWith('search')
-  const isBookmarks = type.startsWith('bookmarks')
-  const isSingleBookmark = type === 'single-bookmark'
-  const isNotifications = type.startsWith('notifications')
-  const isPerformance = type.startsWith('performance') || type.startsWith('homelab-performance')
-  const isClock = type === 'clock-hero'
-  const isCountdown = type === 'countdown-event'
-  const isStickyNote = type === 'sticky-note'
-
-  const widgetBookmarks = useMemo(
-    () => (isBookmarks ? data.bookmarks.filter(b => b.widgetId === widget.id) : data.bookmarks),
-    [data.bookmarks, isBookmarks, widget.id]
-  )
-
-  const availableCategories = useMemo(() => {
-    const set = new Set<string>()
-    widgetBookmarks.forEach(b => {
-      if (b.category?.trim()) set.add(b.category.trim())
-    })
-    return Array.from(set)
-  }, [widgetBookmarks])
-
-  return (
-    <div className="overlay" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) onClose() }}>
-      <section className="dialog settings-dialog">
-        <div className="dialog-heading">
-          <div>
-            <p className="kicker">CUSTOMIZE WIDGET · INSTANCE #{widget.id.slice(0, 6)}</p>
-            <h2>{type.replace('-', ' ').toUpperCase()}</h2>
-          </div>
-          <button className="close-button" onClick={onClose} aria-label="Close"><Icon name="close"/></button>
-        </div>
-
-        <div className="dialog-grid-layout">
-          {/* Controls Column */}
-          <div className="dialog-controls-col">
-            {isSearch && (
-              <>
-                <label>Search Provider
-                  <select value={String(config.provider ?? 'google')} onChange={e => setConfig(prev => ({ ...prev, provider: e.target.value }))}>
-                    <option value="google">Google</option>
-                    <option value="duckduckgo">DuckDuckGo</option>
-                    <option value="bing">Bing</option>
-                    <option value="brave">Brave</option>
-                    <option value="github">GitHub</option>
-                    <option value="youtube">YouTube</option>
-                  </select>
-                </label>
-                <label>Visual Style
-                  <select value={String(config.searchStyle ?? (type === 'search-compact' ? 'compact' : 'pill'))} onChange={e => setConfig(prev => ({ ...prev, searchStyle: e.target.value }))}>
-                    <option value="pill">Pill (Floating Glass Bar)</option>
-                    <option value="compact">Compact (Minimal Clean)</option>
-                    <option value="minimal">Minimal (Borderless Glass)</option>
-                    <option value="floating-glow">Neon Glow</option>
-                  </select>
-                </label>
-                {config.searchStyle !== 'compact' && config.searchStyle !== 'minimal' && (
-                  <label className="check-label">
-                    <input type="checkbox" checked={config.showEngineIcon !== false} onChange={e => setConfig(prev => ({ ...prev, showEngineIcon: e.target.checked }))}/>
-                    Show search engine logo badge
-                  </label>
-                )}
-                <label className="check-label">
-                  <input type="checkbox" checked={config.openInNewTab !== false} onChange={e => setConfig(prev => ({ ...prev, openInNewTab: e.target.checked }))}/>
-                  Open results in a new tab
-                </label>
-              </>
-            )}
-
-            {isBookmarks && (
-              <>
-                <label>Display Style
-                  <select value={String(config.bookmarkStyle ?? (type === 'bookmarks-icons' ? 'icons-only' : type === 'bookmarks-dock' ? 'dock' : 'tiles'))} onChange={e => setConfig(prev => ({ ...prev, bookmarkStyle: e.target.value }))}>
-                    <option value="icons-only">Icons Only (App Launchpad / No Text)</option>
-                    <option value="tiles">Cards / Tiles with Host</option>
-                    <option value="compact-chips">Compact Chips</option>
-                    <option value="dock">Dock (macOS Floating Glass Dock)</option>
-                  </select>
-                </label>
-                <label>Icon Scale
-                  <select value={String(config.iconSize ?? 'normal')} onChange={e => setConfig(prev => ({ ...prev, iconSize: e.target.value }))}>
-                    <option value="normal">Normal</option>
-                    <option value="large">Large</option>
-                  </select>
-                </label>
-                {availableCategories.length > 0 && (
-                  <label>Filter by Bookmark Category
-                    <select value={String(config.categoryFilter ?? 'all')} onChange={e => setConfig(prev => ({ ...prev, categoryFilter: e.target.value }))}>
-                      <option value="all">All categories ({widgetBookmarks.length} links)</option>
-                      {availableCategories.map(cat => (
-                        <option key={cat} value={cat}>{cat}</option>
-                      ))}
-                    </select>
-                  </label>
-                )}
-              </>
-            )}
-
-            {isSingleBookmark && (
-              <>
-                {data.bookmarks.length > 0 && (
-                  <label>Select from Existing Bookmarks
-                    <select
-                      value={String(config.bookmarkId ?? '')}
-                      onChange={e => {
-                        const chosen = data.bookmarks.find(b => b.id === e.target.value)
-                        if (chosen) {
-                          setConfig(prev => ({
-                            ...prev,
-                            bookmarkId: chosen.id,
-                            title: chosen.name,
-                            url: chosen.url,
-                            icon: chosen.icon || '',
-                            subtitle: chosen.category || ''
-                          }))
-                        }
-                      }}
-                    >
-                      <option value="">-- Choose saved link or enter manually below --</option>
-                      {data.bookmarks.map(b => (
-                        <option key={b.id} value={b.id}>{b.name} ({b.url})</option>
-                      ))}
-                    </select>
-                  </label>
-                )}
-                <label>Title
-                  <input
-                    value={String(config.title ?? '')}
-                    onChange={e => setConfig(prev => ({ ...prev, title: e.target.value }))}
-                    placeholder="e.g. Proxmox Cluster, Home Assistant"
-                  />
-                </label>
-                <label>Destination URL
-                  <input
-                    type="url"
-                    value={String(config.url ?? '')}
-                    onChange={e => setConfig(prev => ({ ...prev, url: e.target.value }))}
-                    placeholder="https://..."
-                  />
-                </label>
-                <label>Custom Emoji or Image URL
-                  <input
-                    value={String(config.icon ?? '')}
-                    onChange={e => setConfig(prev => ({ ...prev, icon: e.target.value }))}
-                    placeholder="e.g. ⚡ or https://... or leave empty for auto-favicon"
-                  />
-                </label>
-                <label>Subtitle / Category
-                  <input
-                    value={String(config.subtitle ?? '')}
-                    onChange={e => setConfig(prev => ({ ...prev, subtitle: e.target.value }))}
-                    placeholder="e.g. Virtualization or port 8006"
-                  />
-                </label>
-              </>
-            )}
-
-            {isNotifications && (
-              <>
-                <label>Notification Style
-                  <select value={String(config.notificationStyle ?? (type === 'notifications-badge' ? 'badge-only' : type === 'notifications-ticker' ? 'compact-ticker' : 'cards'))} onChange={e => setConfig(prev => ({ ...prev, notificationStyle: e.target.value }))}>
-                    <option value="cards">Glass Cards List</option>
-                    <option value="timeline">Vertical Timeline</option>
-                    <option value="compact-ticker">Compact Ticker (1-row stream)</option>
-                    <option value="badge-only">Status Badge Counter (1×1 Chip)</option>
-                  </select>
-                </label>
-                {config.notificationStyle !== 'badge-only' && (
-                  <label>Max items displayed
-                    <select value={Number(config.maxItems ?? 6)} onChange={e => setConfig(prev => ({ ...prev, maxItems: Number(e.target.value) }))}>
-                      <option value={3}>3 notifications</option>
-                      <option value={6}>6 notifications</option>
-                      <option value={10}>10 notifications</option>
-                    </select>
-                  </label>
-                )}
-              </>
-            )}
-
-            {isPerformance && (
-              <>
-                <label>Performance Visualization
-                  <select
-                    value={String(config.perfStyle ?? (type === 'performance-graph' ? 'time-series-graph' : type === 'performance-kpi' ? 'kpi-stats' : 'radial-gauges'))}
-                    onChange={e => setConfig(prev => ({ ...prev, perfStyle: e.target.value }))}
-                  >
-                    <option value="radial-gauges">Circular Radial Gauges (Dials)</option>
-                    <option value="time-series-graph">Time Series Graph / Sparkline</option>
-                    <option value="kpi-stats">KPI Stat Numbers (Compact)</option>
-                    <option value="horizontal-bars">Horizontal Meter Bars</option>
-                  </select>
-                </label>
-              </>
-            )}
-
-            {isClock && (
-              <>
-                <label>Clock Dial & Layout
-                  <select
-                    value={String(config.clockStyle ?? 'digital-modern')}
-                    onChange={e => setConfig(prev => ({ ...prev, clockStyle: e.target.value }))}
-                  >
-                    <option value="digital-modern">Digital Modern (Hero Clean)</option>
-                    <option value="analog-minimal">Analog Minimal (Liquid Glass Dial)</option>
-                    <option value="world-clocks">World Clocks (Local & UTC)</option>
-                  </select>
-                </label>
-                <label className="check-label">
-                  <input
-                    type="checkbox"
-                    checked={config.showSeconds === true}
-                    onChange={e => setConfig(prev => ({ ...prev, showSeconds: e.target.checked }))}
-                  />
-                  Show live seconds (:ss)
-                </label>
-                <label className="check-label">
-                  <input
-                    type="checkbox"
-                    checked={config.format24h !== false}
-                    onChange={e => setConfig(prev => ({ ...prev, format24h: e.target.checked }))}
-                  />
-                  24-Hour format (e.g. 15:30 vs 03:30 PM)
-                </label>
-              </>
-            )}
-
-            {isCountdown && (
-              <>
-                <label>Event Name
-                  <input
-                    value={String(config.title ?? '')}
-                    onChange={e => setConfig(prev => ({ ...prev, title: e.target.value }))}
-                    placeholder="e.g. Summer Vacation, Server Migration"
-                  />
-                </label>
-                <label>Target Date & Time
-                  <input
-                    type="datetime-local"
-                    value={String(config.targetDate ?? '')}
-                    onChange={e => setConfig(prev => ({ ...prev, targetDate: e.target.value }))}
-                  />
-                </label>
-                <label>Event Icon / Emoji
-                  <input
-                    value={String(config.icon ?? '🎯')}
-                    onChange={e => setConfig(prev => ({ ...prev, icon: e.target.value }))}
-                    placeholder="e.g. 🚀, ✈️, 🎂, ⚡"
-                  />
-                </label>
-                <label>Visual Counter Style
-                  <select
-                    value={String(config.countdownStyle ?? 'hero-counter')}
-                    onChange={e => setConfig(prev => ({ ...prev, countdownStyle: e.target.value }))}
-                  >
-                    <option value="hero-counter">Glass Digit Boxes (Days / Hours / Mins)</option>
-                    <option value="compact-badge">Compact Badge (Single Line)</option>
-                    <option value="progress-bar">Timeline Progress Bar</option>
-                  </select>
-                </label>
-                {config.countdownStyle === 'progress-bar' && (
-                  <label>Event Start Date (for % progress)
-                    <input
-                      type="datetime-local"
-                      value={String(config.startDate ?? '')}
-                      onChange={e => setConfig(prev => ({ ...prev, startDate: e.target.value }))}
-                    />
-                  </label>
-                )}
-              </>
-            )}
-
-            {isStickyNote && (
-              <>
-                <label>Note Format
-                  <select
-                    value={String(config.noteType ?? 'text')}
-                    onChange={e => setConfig(prev => ({ ...prev, noteType: e.target.value }))}
-                  >
-                    <option value="text">Plain Text / Markdown Scratchpad</option>
-                    <option value="checklist">Interactive Checklist (Tasks)</option>
-                  </select>
-                </label>
-                <label>Pin Accent Color
-                  <select
-                    value={String(config.pinColor ?? 'blue')}
-                    onChange={e => setConfig(prev => ({ ...prev, pinColor: e.target.value }))}
-                  >
-                    <option value="blue">Electric Blue</option>
-                    <option value="emerald">Emerald Green</option>
-                    <option value="amber">Warm Amber</option>
-                    <option value="purple">Neon Purple</option>
-                  </select>
-                </label>
-                <label>Note Content
-                  <textarea
-                    rows={4}
-                    value={String(config.content ?? '')}
-                    onChange={e => setConfig(prev => ({ ...prev, content: e.target.value }))}
-                    placeholder={config.noteType === 'checklist' ? 'JSON items or one task per line' : 'Write text here...'}
-                  />
-                </label>
-              </>
-            )}
-
-            <div className="settings-section-divider"/>
-            <p className="kicker">APPEARANCE</p>
-            <label>Card Background
-              <select value={String(config.backgroundStyle ?? 'glass')} onChange={e => setConfig(prev => ({ ...prev, backgroundStyle: e.target.value }))}>
-                <option value="glass">Liquid Glass (default)</option>
-                <option value="transparent">Transparent (no background)</option>
-                <option value="solid">Solid Dark</option>
-                <option value="tinted">Tinted Accent</option>
-              </select>
-            </label>
-            <label>Accent / Tint Color
-              <select value={String(config.accentColor ?? 'default')} onChange={e => setConfig(prev => ({ ...prev, accentColor: e.target.value }))}>
-                <option value="default">Default Blue</option>
-                <option value="purple">Purple</option>
-                <option value="emerald">Emerald</option>
-                <option value="amber">Amber</option>
-                <option value="rose">Rose</option>
-                <option value="cyan">Cyan</option>
-              </select>
-            </label>
-
-            <div className="settings-section-divider"/>
-            <p className="kicker">CLICK REDIRECTION (OPTIONAL)</p>
-            <label>Redirect URL on click
-              <input
-                type="url"
-                value={String(config.redirectUrl ?? '')}
-                onChange={e => setConfig(prev => ({ ...prev, redirectUrl: e.target.value }))}
-                placeholder="https://proxmox.lan:8006 or https://..."
-              />
-            </label>
-            <label className="check-label">
-              <input
-                type="checkbox"
-                checked={config.redirectNewTab !== false}
-                onChange={e => setConfig(prev => ({ ...prev, redirectNewTab: e.target.checked }))}
-              />
-              Open redirection in a new tab
-            </label>
-          </div>
-
-          {/* Live Preview Column */}
-          <div className="dialog-preview-col">
-            <p className="kicker">LIVE GLASS PREVIEW</p>
-            <div className="live-preview-box">
-              {definition && (
-                <WidgetRenderer
-                  definition={definition}
-                  props={{
-                    widgetId: widget.id,
-                    data,
-                    state: 'ready',
-                    editing: false,
-                    configuration: config
-                  }}
-                />
-              )}
-            </div>
-            <p className="subtle preview-hint">
-              This preview updates live. Changes will only apply to this specific widget instance.
-            </p>
-          </div>
-        </div>
-
-        <div className="dialog-actions">
-          <button className="button button-quiet" onClick={onClose}>Cancel</button>
-          <button className="button button-primary" onClick={() => onSave(config)}>Save settings</button>
-        </div>
-      </section>
-    </div>
-  )
-}
+const LazyLoginScreen = lazy(() => import('./LoginScreen'))
+const loadEditOverlays = () => import('./EditOverlays')
+const LazyBookmarkDialog = lazy(() => loadEditOverlays().then(m => ({ default: m.BookmarkDialog })))
+const LazyWidgetSettings = lazy(() => loadEditOverlays().then(m => ({ default: m.WidgetSettings })))
+const LazyWidgetCatalog = lazy(() => loadEditOverlays().then(m => ({ default: m.WidgetCatalog })))
 
 const CACHE_KEY = 'homedash_cache_v2'
 const LEGACY_CACHE_KEY = 'homedash_cache_v1'
@@ -949,6 +378,10 @@ function Dashboard({
   }, [])
 
   useEffect(() => {
+    if (editing) void loadEditOverlays()
+  }, [editing])
+
+  useEffect(() => {
     if (!showCatalog || definitions.length > 0) return
     let cancelled = false
     fetchWidgetDefinitions().then(result => {
@@ -1178,7 +611,7 @@ function Dashboard({
       onDoubleClick={onCanvasDoubleClick}
     >
       {/* Invisible auto-revealing menu trigger at top-right (no permanent gear icon) */}
-      <div className="corner-hotzone" ref={menuRef}>
+      <div className="corner-hotzone" ref={menuRef} onPointerEnter={() => void loadEditOverlays()}>
         <button
           className="corner-trigger-btn"
           aria-label="Dashboard menu"
@@ -1423,282 +856,44 @@ function Dashboard({
         </section>
       )}
 
-      {showCatalog && (
-        <WidgetCatalog
-          definitions={definitions}
-          widgets={widgets}
-          selectedSlot={selectedSlot}
-          onClose={() => { setShowCatalog(false); setSelectedSlot(null) }}
-          onAdd={addWidget}
-        />
-      )}
+      <Suspense fallback={null}>
+        {showCatalog && (
+          <LazyWidgetCatalog
+            definitions={definitions}
+            widgets={widgets}
+            selectedSlot={selectedSlot}
+            onClose={() => { setShowCatalog(false); setSelectedSlot(null) }}
+            onAdd={addWidget}
+          />
+        )}
 
-      {bookmarkDialog && profile && (
-        <BookmarkDialog
-          profileId={profile.id}
-          widgetId={bookmarkDialog.widgetId}
-          nextSortOrder={
-            bookmarkDialog.bookmark
-              ? undefined
-              : bookmarks
-                  .filter(b => b.widgetId === bookmarkDialog.widgetId)
-                  .reduce((max, b) => Math.max(max, b.sortOrder + 1), 0)
-          }
-          bookmark={bookmarkDialog.bookmark}
-          onClose={() => setBookmarkDialog(null)}
-          onSaved={bookmarkSaved}
-        />
-      )}
-
-      {settingsWidget && (
-        <WidgetSettings
-          widget={settingsWidget}
-          data={data}
-          onClose={() => setSettingsWidget(null)}
-          onSave={configuration => updateConfiguration(settingsWidget, configuration)}
-        />
-      )}
-    </main>
-  )
-}
-
-/* =========================================================================
-   WIDGET CATALOG & CATEGORIES
-   ========================================================================= */
-
-type CatalogCategory = 'all' | 'time' | 'notifications' | 'bookmarks' | 'search' | 'system'
-
-type CatalogEntryMeta = {
-  category: CatalogCategory
-  title: string
-  subtitle: string
-  description: string
-  icon: IconName
-}
-
-const CATALOG_METADATA: Record<string, CatalogEntryMeta> = {
-  search: {
-    category: 'search',
-    title: 'Search Bar',
-    subtitle: 'Floating Glass Pill',
-    description: 'Web search bar with engine switcher, Google/DuckDuckGo logos, and Ctrl+K shortcut.',
-    icon: 'search'
-  },
-  'search-compact': {
-    category: 'search',
-    title: 'Search Minimal',
-    subtitle: 'Compact Input',
-    description: 'Minimal borderless search box designed for small 1-cell or 2-cell spaces.',
-    icon: 'search'
-  },
-  bookmarks: {
-    category: 'bookmarks',
-    title: 'Bookmark Cards',
-    subtitle: 'Detailed Tiles',
-    description: 'Rich quick links displaying site title, hostname, and direct launch button.',
-    icon: 'bookmark'
-  },
-  'bookmarks-icons': {
-    category: 'bookmarks',
-    title: 'Bookmark Launchpad',
-    subtitle: 'Icons Only (No Text)',
-    description: 'Clean app launchpad with favicons only and floating hover tooltips.',
-    icon: 'grid'
-  },
-  'bookmarks-dock': {
-    category: 'bookmarks',
-    title: 'Bookmark Dock',
-    subtitle: 'macOS Glass Dock',
-    description: 'Centred horizontal dock of links with zoom and lift animation on hover.',
-    icon: 'bookmark'
-  },
-  'single-bookmark': {
-    category: 'bookmarks',
-    title: 'Single Link Tile',
-    subtitle: 'Hero Square / App Button',
-    description: 'A large dedicated glass square for a single destination like Proxmox or Home Assistant.',
-    icon: 'bookmark'
-  },
-  notifications: {
-    category: 'notifications',
-    title: 'Notification Feed',
-    subtitle: 'List, Cards & Timeline',
-    description: 'Comprehensive activity stream from Notification Center with severity glow and relative time.',
-    icon: 'bell'
-  },
-  'notifications-badge': {
-    category: 'notifications',
-    title: 'Notification Chip',
-    subtitle: 'Status Counter Badge',
-    description: 'Minimal 1×1 glass bell badge with unread alert counter and live activity pulse.',
-    icon: 'bell'
-  },
-  'notifications-ticker': {
-    category: 'notifications',
-    title: 'Notification Ticker',
-    subtitle: 'Single-Row Headline',
-    description: 'Ultra-compact single-line ticker rotating the latest unread homelab alert.',
-    icon: 'bell'
-  },
-  'homelab-performance': {
-    category: 'system',
-    title: 'Hardware Dials',
-    subtitle: 'Circular Gauges',
-    description: 'Radial glass dials for CPU, RAM, and GPU percentage utilization.',
-    icon: 'activity'
-  },
-  'performance-graph': {
-    category: 'system',
-    title: 'Performance Graph',
-    subtitle: 'Live Sparkline Timeline',
-    description: 'Continuous time-series graph tracking activity and usage over time.',
-    icon: 'activity'
-  },
-  'performance-kpi': {
-    category: 'system',
-    title: 'Performance Numbers',
-    subtitle: 'Compact Stat Tiles',
-    description: 'Large minimal percentage stats for small 1-cell or 2-cell slots.',
-    icon: 'activity'
-  },
-  'service-status': {
-    category: 'system',
-    title: 'Service Health',
-    subtitle: 'Infrastructure Checks',
-    description: 'Real-time healthcheck status and response status of internal homelab services.',
-    icon: 'grid'
-  },
-  'clock-hero': {
-    category: 'time',
-    title: 'Clock Hero',
-    subtitle: 'Digital, Analog & World',
-    description: 'Customizable liquid-glass clock with seconds, analog dial, and world timezones.',
-    icon: 'activity'
-  },
-  'countdown-event': {
-    category: 'time',
-    title: 'Event Countdown',
-    subtitle: 'Days & Time Remaining',
-    description: 'Track days, hours, and seconds left for vacations, releases, or renewals with progress bars.',
-    icon: 'activity'
-  },
-  'sticky-note': {
-    category: 'time',
-    title: 'Sticky Note & Checklist',
-    subtitle: 'Scratchpad or Tasks',
-    description: 'Jot down commands, homelab IP notes, or interactive todo items directly on your canvas.',
-    icon: 'edit'
-  }
-}
-
-function WidgetCatalog({
-  definitions,
-  widgets,
-  selectedSlot,
-  onClose,
-  onAdd
-}: {
-  definitions: ApiWidgetDefinition[]
-  widgets: Widget[]
-  selectedSlot: { x: number; y: number } | null
-  onClose: () => void
-  onAdd: (definition: ApiWidgetDefinition) => void
-}) {
-  const [activeTab, setActiveTab] = useState<CatalogCategory>('all')
-
-  const categories: { key: CatalogCategory; label: string }[] = [
-    { key: 'all', label: 'All widgets' },
-    { key: 'time', label: 'Time & Notes' },
-    { key: 'notifications', label: 'Notifications' },
-    { key: 'bookmarks', label: 'Bookmarks' },
-    { key: 'search', label: 'Search' },
-    { key: 'system', label: 'System' }
-  ]
-
-  const filtered = definitions.filter(def => {
-    if (activeTab === 'all') return true
-    const meta = CATALOG_METADATA[def.type]
-    return meta?.category === activeTab
-  })
-
-  return (
-    <div className="overlay catalog-overlay" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) onClose() }}>
-      <section className="catalog-panel">
-        <div className="catalog-header">
-          <div>
-            <p className="kicker">
-              {selectedSlot ? `PLACING AT CELL (${selectedSlot.x + 1}, ${selectedSlot.y + 1})` : 'PERSONALIZE YOUR CANVAS'}
-            </p>
-            <h2>Widget Library</h2>
-            <p className="subtle">Add any widget to your dashboard. Multiple instances of any widget are supported.</p>
-          </div>
-          <button className="close-button" onClick={onClose} aria-label="Close"><Icon name="close"/></button>
-        </div>
-
-        {/* Category Tabs */}
-        <div className="catalog-tabs" role="tablist">
-          {categories.map(cat => (
-            <button
-              key={cat.key}
-              type="button"
-              role="tab"
-              aria-selected={activeTab === cat.key}
-              className={`catalog-tab-btn ${activeTab === cat.key ? 'active' : ''}`}
-              onClick={() => setActiveTab(cat.key)}
-            >
-              {cat.label}
-            </button>
-          ))}
-        </div>
-
-        {/* Widgets Grid */}
-        <div className="catalog-grid">
-          {filtered.map(definition => {
-            const meta = CATALOG_METADATA[definition.type] ?? {
-              category: 'system' as CatalogCategory,
-              title: definition.type.replaceAll('-', ' '),
-              subtitle: 'Widget',
-              description: 'HomeDash dashboard widget.',
-              icon: 'grid' as IconName
+        {bookmarkDialog && profile && (
+          <LazyBookmarkDialog
+            profileId={profile.id}
+            widgetId={bookmarkDialog.widgetId}
+            nextSortOrder={
+              bookmarkDialog.bookmark
+                ? undefined
+                : bookmarks
+                    .filter(b => b.widgetId === bookmarkDialog.widgetId)
+                    .reduce((max, b) => Math.max(max, b.sortOrder + 1), 0)
             }
+            bookmark={bookmarkDialog.bookmark}
+            onClose={() => setBookmarkDialog(null)}
+            onSaved={bookmarkSaved}
+          />
+        )}
 
-            // Count existing instances of this type
-            const activeCount = widgets.filter(w => w.widgetType === definition.type && w.isEnabled).length
-
-            return (
-              <article className="catalog-card" key={definition.type}>
-                <div className="catalog-card-top">
-                  <span className="catalog-icon"><Icon name={meta.icon} size={17}/></span>
-                  <div className="catalog-badges">
-                    {activeCount > 0 && (
-                      <span className="catalog-count-pill">{activeCount} on canvas</span>
-                    )}
-                    <span className="catalog-size">{definition.initialSize.w} × {definition.initialSize.h}</span>
-                  </div>
-                </div>
-                <h3>{meta.title}</h3>
-                <span className="catalog-subtitle">{meta.subtitle}</span>
-                <p>{meta.description}</p>
-                <button
-                  type="button"
-                  className="button button-add"
-                  onClick={() => onAdd(definition)}
-                >
-                  <Icon name="plus" size={13}/>
-                  {selectedSlot ? `Place at (${selectedSlot.x + 1}, ${selectedSlot.y + 1})` : 'Add widget'}
-                </button>
-              </article>
-            )
-          })}
-        </div>
-
-        <div className="catalog-foot">
-          {selectedSlot
-            ? `Selected slot: Row ${selectedSlot.y + 1}, Column ${selectedSlot.x + 1}. You can resize and move it anytime.`
-            : 'You can drag, resize, and configure multiple copies of each widget freely on the grid.'}
-        </div>
-      </section>
-    </div>
+        {settingsWidget && (
+          <LazyWidgetSettings
+            widget={settingsWidget}
+            data={data}
+            onClose={() => setSettingsWidget(null)}
+            onSave={configuration => updateConfiguration(settingsWidget, configuration)}
+          />
+        )}
+      </Suspense>
+    </main>
   )
 }
 
@@ -1755,20 +950,31 @@ function App() {
 
   if (!user) {
     return (
-      <LoginScreen
-        onAuthenticated={authenticatedUser => {
-          fetchBootstrap('desktop')
-            .then(payload => {
-              savePayloadToCache(payload)
-              setInitialPayload(payload)
-              setUser(payload.user)
-            })
-            .catch(() => {
-              writeCache({ user: authenticatedUser })
-              setUser(authenticatedUser)
-            })
-        }}
-      />
+      <Suspense
+        fallback={
+          <main className="login-page">
+            <div className="login-card loading-card">
+              <span className="brand-symbol"><Icon name="grid"/></span>
+              <p>Loading…</p>
+            </div>
+          </main>
+        }
+      >
+        <LazyLoginScreen
+          onAuthenticated={authenticatedUser => {
+            fetchBootstrap('desktop')
+              .then(payload => {
+                savePayloadToCache(payload)
+                setInitialPayload(payload)
+                setUser(payload.user)
+              })
+              .catch(() => {
+                writeCache({ user: authenticatedUser })
+                setUser(authenticatedUser)
+              })
+          }}
+        />
+      </Suspense>
     )
   }
 

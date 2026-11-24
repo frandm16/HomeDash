@@ -124,7 +124,7 @@ async function startStandaloneStack() {
       return
     }
 
-    const cleanPath = normalize(reqUrl.split('?')[0]).replace(/^(\.\.(\/|\\|$))+/, '')
+    const cleanPath = normalize(reqUrl.split('?')[0]).replace(/^(\.\.(\/|\\|$))+/, '').replaceAll('\\', '/')
     let filePath = join(DIST_DIR, cleanPath === '/' ? 'index.html' : cleanPath)
     let isFallbackHtml = false
     try {

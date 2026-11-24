@@ -196,6 +196,14 @@ function SearchWidget({ configuration }: WidgetRenderProps) {
    BOOKMARKS WIDGET (STYLES: icons-only, tiles, compact-chips, dock)
    ========================================================================= */
 
+const FAVICON_API_BASE = import.meta.env.VITE_API_BASE_URL ?? '/api'
+const PUBLIC_HOST_RE = /^(?=.{1,253}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/i
+const PRIVATE_TLD_RE = /\.(local|lan|internal|home|arpa|localhost)$/i
+
+function isPublicHostname(domain: string): boolean {
+  return Boolean(domain) && domain !== 'localhost' && PUBLIC_HOST_RE.test(domain) && !PRIVATE_TLD_RE.test(domain)
+}
+
 export function BookmarkFavicon({ url, icon, name }: { url: string; icon?: string; name: string }) {
   const [failedState, setFailedState] = React.useState<{ key: string; step: number }>({ key: '', step: 0 })
   const trimmedIcon = (icon ?? '').trim()
@@ -210,6 +218,8 @@ export function BookmarkFavicon({ url, icon, name }: { url: string; icon?: strin
           <img
             src={trimmedIcon}
             alt=""
+            width={32}
+            height={32}
             loading="lazy"
             decoding="async"
             onError={() => setFailedState({ key: stateKey, step: 1 })}
@@ -225,12 +235,12 @@ export function BookmarkFavicon({ url, icon, name }: { url: string; icon?: strin
     return <span className="bookmark-icon custom-emoji">{trimmedIcon}</span>
   }
 
-  // 3. Automatic Favicon resolution from URL (Google -> DuckDuckGo -> Direct /favicon.ico)
+  // 3. Automatic Favicon resolution (Local cached API proxy -> Google fallback -> Direct /favicon.ico)
   let domain = ''
   let origin = ''
   try {
     const parsed = new URL(url)
-    domain = parsed.hostname
+    domain = parsed.hostname.toLowerCase()
     origin = parsed.origin
   } catch {
     domain = ''
@@ -238,11 +248,15 @@ export function BookmarkFavicon({ url, icon, name }: { url: string; icon?: strin
   }
 
   const candidates = domain
-    ? [
-        `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=128`,
-        `https://icons.duckduckgo.com/ip3/${encodeURIComponent(domain)}.ico`,
-        ...(origin ? [`${origin}/favicon.ico`] : [])
-      ]
+    ? isPublicHostname(domain)
+      ? [
+          `${FAVICON_API_BASE}/v1/favicons?domain=${encodeURIComponent(domain)}`,
+          `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=64`,
+          ...(origin ? [`${origin}/favicon.ico`] : [])
+        ]
+      : origin
+        ? [`${origin}/favicon.ico`]
+        : []
     : []
 
   const activeSrc = candidates[step]
@@ -252,6 +266,8 @@ export function BookmarkFavicon({ url, icon, name }: { url: string; icon?: strin
         <img
           src={activeSrc}
           alt=""
+          width={32}
+          height={32}
           loading="lazy"
           decoding="async"
           onError={() => setFailedState({ key: stateKey, step: step + 1 })}
@@ -806,6 +822,12 @@ function ServicesWidget({ data, state }: WidgetRenderProps) {
    CLOCK HERO WIDGET (STYLES: digital-modern, analog-minimal, world-clocks)
    ========================================================================= */
 
+const CLOCK_DATE_FORMATTER = new Intl.DateTimeFormat('en-US', {
+  weekday: 'long',
+  month: 'short',
+  day: 'numeric'
+})
+
 function ClockHeroWidget({ configuration }: WidgetRenderProps) {
   const [now, setNow] = React.useState(() => new Date())
   const clockStyle = String(configuration?.clockStyle ?? 'digital-modern')
@@ -814,8 +836,16 @@ function ClockHeroWidget({ configuration }: WidgetRenderProps) {
 
   React.useEffect(() => {
     const interval = clockStyle === 'analog-minimal' || showSeconds ? 1000 : 10000
-    const timer = setInterval(() => setNow(new Date()), interval)
-    return () => clearInterval(timer)
+    const tick = () => {
+      if (!document.hidden) setNow(new Date())
+    }
+    const timer = setInterval(tick, interval)
+    const onVisibility = () => { if (!document.hidden) setNow(new Date()) }
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => {
+      clearInterval(timer)
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
   }, [clockStyle, showSeconds])
 
   const hours = now.getHours()
@@ -824,11 +854,7 @@ function ClockHeroWidget({ configuration }: WidgetRenderProps) {
   const seconds = now.getSeconds().toString().padStart(2, '0')
   const ampm = format24h ? '' : (hours >= 12 ? 'PM' : 'AM')
 
-  const dateStr = new Intl.DateTimeFormat('en-US', {
-    weekday: 'long',
-    month: 'short',
-    day: 'numeric'
-  }).format(now)
+  const dateStr = CLOCK_DATE_FORMATTER.format(now)
 
   if (clockStyle === 'analog-minimal') {
     const secDeg = (now.getSeconds() / 60) * 360
@@ -934,8 +960,16 @@ function CountdownEventWidget({ configuration }: WidgetRenderProps) {
 
   React.useEffect(() => {
     const interval = countdownStyle === 'compact-badge' ? 60_000 : 1000
-    const timer = setInterval(() => setCurrentTimestamp(Date.now()), interval)
-    return () => clearInterval(timer)
+    const tick = () => {
+      if (!document.hidden) setCurrentTimestamp(Date.now())
+    }
+    const timer = setInterval(tick, interval)
+    const onVisibility = () => { if (!document.hidden) setCurrentTimestamp(Date.now()) }
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => {
+      clearInterval(timer)
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
   }, [countdownStyle])
 
   if (!targetDateStr) {

@@ -840,7 +840,7 @@ function Dashboard({
               aria-label={`Add widget at cell ${slot.x + 1}, ${slot.y + 1}`}
               title={`Add widget at (${slot.x + 1}, ${slot.y + 1})`}
             >
-              <Icon name="plus" size={16}/>
+              <span aria-hidden="true">+</span>
             </button>
           ))}
 

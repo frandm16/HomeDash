@@ -13,6 +13,7 @@ import * as dashboardRepository from './infrastructure/db/repositories/dashboard
 import { createService, deleteService, listAllServices, listServices, updateService } from './infrastructure/db/repositories/services.js'
 import { checkServices } from './adapters/service-health.js'
 import { collectPerformanceSnapshot } from './adapters/performance.js'
+import { createFaviconService, isPublicFaviconDomain } from './adapters/favicons.js'
 import { createDevelopmentSources, createSnapshotService } from './snapshot.js'
 import * as authService from './auth.js'
 import { recordAudit as defaultRecordAudit } from './infrastructure/audit.js'
@@ -50,6 +51,7 @@ export async function buildApp(dependencies: AppDependencies = {}): Promise<Fast
     if (config.isProduction) reply.header('Strict-Transport-Security', 'max-age=31536000; includeSubDomains')
   })
   const snapshotService = createSnapshotService(createDevelopmentSources())
+  const faviconService = createFaviconService()
 
   app.addHook('onResponse', async (request, reply) => {
     const route = request.routeOptions.url ?? 'unknown'
@@ -258,6 +260,21 @@ export async function buildApp(dependencies: AppDependencies = {}): Promise<Fast
     }
   })
   app.get('/api/v1/performance', async () => collectPerformanceSnapshot())
+  app.get('/api/v1/favicons', async (request, reply) => {
+    const query = request.query as { domain?: string }
+    const domain = (query.domain ?? '').trim().toLowerCase()
+    if (!isPublicFaviconDomain(domain)) {
+      return reply.code(400).send({ error: { code: 'INVALID_DOMAIN', message: 'Public domain is required', requestId: request.id } })
+    }
+    const icon = await faviconService.getFavicon(domain)
+    if (!icon) {
+      reply.header('Cache-Control', 'private, max-age=300')
+      return reply.code(404).send()
+    }
+    reply.header('Cache-Control', 'private, max-age=604800, immutable')
+    reply.type(icon.contentType)
+    return reply.send(icon.body)
+  })
   app.get('/api/v1/services', async () => {
     const services = await listServices()
     const results = await checkServices(services.filter((service) => service.healthcheckUrl).map((service) => ({ id: service.id, url: service.healthcheckUrl! })))

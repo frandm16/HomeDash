@@ -153,6 +153,43 @@ export async function buildApp(dependencies: AppDependencies = {}): Promise<Fast
   })
 
   app.get('/api/v1/widgets/definitions', async () => ({ widgets: listWidgetDefinitions() }))
+  app.get('/api/v1/bootstrap', async (request) => {
+    const userId = request.auth!.user.id
+    const query = request.query as { profile?: string }
+    const targetProfileKey = query.profile === 'wall' || query.profile === 'mobile' ? query.profile : 'desktop'
+    const profiles = await dashboard.listProfiles(userId)
+    const chosenProfile = profiles.find((item: { profileKey: string }) => item.profileKey === targetProfileKey) ?? profiles[0] ?? null
+
+    const [widgets, bookmarks] = chosenProfile
+      ? await Promise.all([
+          dashboard.listWidgets(userId, chosenProfile.id),
+          dashboard.listBookmarks(userId, chosenProfile.id),
+        ])
+      : [[], []]
+
+    const needsDashboard = widgets.some((w: { isEnabled?: boolean; widgetType: string }) =>
+      w.isEnabled !== false && (w.widgetType.startsWith('notifications') || w.widgetType === 'service-status')
+    )
+    const needsPerformance = widgets.some((w: { isEnabled?: boolean; widgetType: string }) =>
+      w.isEnabled !== false && (w.widgetType === 'homelab-performance' || w.widgetType.startsWith('performance'))
+    )
+
+    const [snapshotResult, performanceResult] = await Promise.allSettled([
+      needsDashboard ? snapshotService.getSnapshot() : Promise.resolve(null),
+      needsPerformance ? collectPerformanceSnapshot() : Promise.resolve(null),
+    ])
+
+    return {
+      user: request.auth!.user,
+      expiresAt: request.auth!.expiresAt.toISOString(),
+      csrfToken: request.cookies.homedash_csrf ?? request.auth!.csrfToken,
+      profile: chosenProfile,
+      widgets,
+      bookmarks,
+      snapshot: snapshotResult.status === 'fulfilled' ? snapshotResult.value : null,
+      performance: performanceResult.status === 'fulfilled' ? performanceResult.value : null,
+    }
+  })
   app.get('/api/v1/dashboards', async (request) => ({ dashboards: await dashboard.listDashboards(request.auth!.user.id) }))
   app.post('/api/v1/dashboards', { schema: { body: dashboardNameBody } }, async (request, reply) => { const dashboardResult = await dashboard.createDashboard(request.auth!.user.id, request.body as { name: string }); if (dashboardResult) await recordAudit({ userId: request.auth!.user.id, action: 'create', resourceType: 'dashboard', resourceId: dashboardResult.id }); return reply.code(201).send(dashboardResult) })
   app.patch('/api/v1/dashboards/:dashboardId', { schema: { body: dashboardNameBody } }, async (request, reply) => { const id = (request.params as { dashboardId: string }).dashboardId; const result = await dashboard.updateDashboard(request.auth!.user.id, id, request.body as { name: string }); if (!result) return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Dashboard not found', requestId: request.id } }); await recordAudit({ userId: request.auth!.user.id, action: 'update', resourceType: 'dashboard', resourceId: id }); return result })

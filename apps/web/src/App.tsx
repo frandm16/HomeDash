@@ -1,17 +1,16 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent, PointerEvent, ReactNode } from 'react'
 import {
+  ApiError,
+  consumeInitialBootstrap,
   createBookmark,
   createWidget,
   deleteBookmark,
   deleteWidget,
-  fetchBookmarks,
+  fetchBootstrap,
   fetchDashboard,
   fetchPerformance,
-  fetchProfiles,
   fetchWidgetDefinitions,
-  fetchWidgets,
-  getSession,
   login,
   logout,
   openEvents,
@@ -19,6 +18,7 @@ import {
   updateWidget,
   type AuthUser,
   type Bookmark,
+  type BootstrapPayload,
   type DashboardProfile,
   type DashboardSnapshot,
   type GridLayout,
@@ -608,21 +608,44 @@ function WidgetSettings({
   )
 }
 
-const CACHE_KEY = 'homedash_cache_v1'
-type StartpageCache = { user?: AuthUser; profile?: DashboardProfile; widgets?: Widget[]; bookmarks?: Bookmark[] }
+const CACHE_KEY = 'homedash_cache_v2'
+const LEGACY_CACHE_KEY = 'homedash_cache_v1'
+type StartpageCache = {
+  user?: AuthUser
+  profile?: DashboardProfile
+  widgets?: Widget[]
+  bookmarks?: Bookmark[]
+  snapshot?: DashboardSnapshot | null
+  performance?: PerformanceSnapshot | null
+}
+
+let memoryCache: StartpageCache | null = null
 
 function readCache(): StartpageCache {
+  if (memoryCache) return memoryCache
   try {
+    localStorage.removeItem(LEGACY_CACHE_KEY)
     const raw = localStorage.getItem(CACHE_KEY)
-    return raw ? (JSON.parse(raw) as StartpageCache) : {}
+    memoryCache = raw ? (JSON.parse(raw) as StartpageCache) : {}
   } catch {
-    return {}
+    memoryCache = {}
   }
+  return memoryCache
+}
+
+function compactPerformance(perf: PerformanceSnapshot | null | undefined): PerformanceSnapshot | null | undefined {
+  if (!perf) return perf
+  return perf.history && perf.history.length > 12 ? { ...perf, history: perf.history.slice(-12) } : perf
 }
 
 function writeCache(patch: Partial<StartpageCache>): void {
   try {
-    const next = { ...readCache(), ...patch }
+    const normalizedPatch: Partial<StartpageCache> = {
+      ...patch,
+      ...(patch.performance !== undefined ? { performance: compactPerformance(patch.performance) } : {})
+    }
+    const next = { ...readCache(), ...normalizedPatch }
+    memoryCache = next
     localStorage.setItem(CACHE_KEY, JSON.stringify(next))
   } catch {
     /* Ignore storage quota errors. */
@@ -630,8 +653,10 @@ function writeCache(patch: Partial<StartpageCache>): void {
 }
 
 function clearCache(): void {
+  memoryCache = {}
   try {
     localStorage.removeItem(CACHE_KEY)
+    localStorage.removeItem(LEGACY_CACHE_KEY)
   } catch {
     /* Ignore storage errors. */
   }
@@ -668,20 +693,33 @@ function measureGrid(grid: HTMLElement): GridMetrics {
   return { left: rect.left, top: rect.top, cellWidth, cellHeight, gapX, gapY, columns, rows }
 }
 
-function Dashboard({ user, onLogout }: { user: AuthUser; onLogout: () => void }) {
+function Dashboard({
+  user,
+  initialPayload,
+  onUnauthenticated,
+  onLogout
+}: {
+  user: AuthUser
+  initialPayload: BootstrapPayload | null
+  onUnauthenticated: () => void
+  onLogout: () => void
+}) {
   const initialCache = useMemo(() => readCache(), [])
-  const [snapshot, setSnapshot] = useState<DashboardSnapshot | null>(null)
-  const [performance, setPerformance] = useState<PerformanceSnapshot | null>(null)
-  const [bookmarks, setBookmarks] = useState<Bookmark[]>(() => initialCache.bookmarks ?? [])
-  const [widgets, setWidgets] = useState<Widget[]>(() => initialCache.widgets ?? [])
+  const [bootstrapReady, setBootstrapReady] = useState(() => Boolean(initialPayload))
+  const [snapshot, setSnapshot] = useState<DashboardSnapshot | null>(() => initialPayload?.snapshot ?? initialCache.snapshot ?? null)
+  const [performance, setPerformance] = useState<PerformanceSnapshot | null>(() => initialPayload?.performance ?? initialCache.performance ?? null)
+  const [bookmarks, setBookmarks] = useState<Bookmark[]>(() => initialPayload?.bookmarks ?? initialCache.bookmarks ?? [])
+  const [widgets, setWidgets] = useState<Widget[]>(() => initialPayload?.widgets ?? initialCache.widgets ?? [])
   const [definitions, setDefinitions] = useState<ApiWidgetDefinition[]>([])
-  const [profile, setProfile] = useState<DashboardProfile | null>(() => initialCache.profile ?? null)
+  const [profile, setProfile] = useState<DashboardProfile | null>(() => initialPayload?.profile ?? initialCache.profile ?? null)
   const [editing, setEditing] = useState(false)
   const [showCatalog, setShowCatalog] = useState(false)
   const [selectedSlot, setSelectedSlot] = useState<{ x: number; y: number } | null>(null)
   const [bookmarkDialog, setBookmarkDialog] = useState<{ bookmark?: Bookmark; widgetId?: string } | null>(null)
   const [settingsWidget, setSettingsWidget] = useState<Widget | null>(null)
-  const [connection, setConnection] = useState<'loading' | 'online' | 'stale' | 'offline'>('loading')
+  const [connection, setConnection] = useState<'loading' | 'online' | 'stale' | 'offline'>(() =>
+    initialPayload || initialCache.widgets?.length ? 'online' : 'loading'
+  )
   const [, setSaveState] = useState<ToastState>('saved')
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null)
   const [menuOpen, setMenuOpen] = useState(false)
@@ -704,6 +742,10 @@ function Dashboard({ user, onLogout }: { user: AuthUser; onLogout: () => void })
   }), [snapshot, bookmarks, performance])
 
   const enabledWidgets = useMemo(() => widgets.filter(widget => widget.isEnabled && widgetRegistry[widget.widgetType]), [widgets])
+  const hasDashboardWidget = useMemo(
+    () => enabledWidgets.some(w => w.widgetType.startsWith('notifications') || w.widgetType === 'service-status'),
+    [enabledWidgets]
+  )
   const hasPerfWidget = useMemo(
     () => enabledWidgets.some(w => w.widgetType === 'homelab-performance' || w.widgetType === 'performance-graph' || w.widgetType === 'performance-kpi'),
     [enabledWidgets]
@@ -775,27 +817,79 @@ function Dashboard({ user, onLogout }: { user: AuthUser; onLogout: () => void })
   }, [menuOpen])
 
   useEffect(() => {
+    if (initialPayload) return
+    let cancelled = false
+    consumeInitialBootstrap()
+      .then(payload => {
+        if (cancelled) return
+        if (payload.profile) {
+          setProfile(prev => (prev?.id === payload.profile?.id && prev?.layoutVersion === payload.profile?.layoutVersion ? prev : payload.profile))
+        }
+        const activeWidgets = payload.widgets.filter(w => !deletedWidgetIdsRef.current.has(w.id))
+        setWidgets(activeWidgets)
+        setBookmarks(payload.bookmarks)
+        if (payload.snapshot) setSnapshot(payload.snapshot)
+        if (payload.performance) setPerformance(payload.performance)
+        setConnection('online')
+        setBootstrapReady(true)
+        writeCache({
+          user: payload.user,
+          ...(payload.profile ? { profile: payload.profile } : {}),
+          widgets: activeWidgets,
+          bookmarks: payload.bookmarks,
+          ...(payload.snapshot ? { snapshot: payload.snapshot } : {}),
+          ...(payload.performance ? { performance: payload.performance } : {})
+        })
+      })
+      .catch(err => {
+        if (cancelled) return
+        if (err instanceof ApiError && err.status === 401) {
+          onUnauthenticated()
+        } else {
+          setConnection('offline')
+        }
+      })
+    return () => { cancelled = true }
+  }, [initialPayload, onUnauthenticated])
+
+  useEffect(() => {
+    if (!bootstrapReady || !hasDashboardWidget || snapshot) return
     const controller = new AbortController()
-    const requests: Promise<unknown>[] = [
-      fetchDashboard(controller.signal).then(dash => {
+    fetchDashboard(controller.signal)
+      .then(dash => {
         setSnapshot(dash)
+        writeCache({ snapshot: dash })
         setConnection('online')
       })
-    ]
-    if (hasPerfWidget) {
-      requests.push(fetchPerformance(controller.signal).then(setPerformance))
-    }
-    Promise.all(requests).catch(() => setConnection('offline'))
+      .catch(() => {
+        if (!controller.signal.aborted) setConnection('offline')
+      })
+    return () => controller.abort()
+  }, [bootstrapReady, hasDashboardWidget, snapshot])
 
-    return () => {
-      controller.abort()
-    }
-  }, [hasPerfWidget])
+  useEffect(() => {
+    if (!bootstrapReady || !hasPerfWidget || performance) return
+    const controller = new AbortController()
+    fetchPerformance(controller.signal)
+      .then(perf => {
+        setPerformance(perf)
+        writeCache({ performance: perf })
+      })
+      .catch(() => undefined)
+    return () => controller.abort()
+  }, [bootstrapReady, hasPerfWidget, performance])
 
   useEffect(() => {
     if (!hasPerfWidget) return
     const poll = () => {
-      if (!document.hidden) fetchPerformance().then(setPerformance).catch(() => undefined)
+      if (!document.hidden) {
+        fetchPerformance()
+          .then(perf => {
+            setPerformance(perf)
+            writeCache({ performance: perf })
+          })
+          .catch(() => undefined)
+      }
     }
     const perfTimer = window.setInterval(poll, 5000)
     const onVisibility = () => { if (!document.hidden) poll() }
@@ -809,12 +903,21 @@ function Dashboard({ user, onLogout }: { user: AuthUser; onLogout: () => void })
   useEffect(() => {
     let source: EventSource | undefined
     let retry: number | undefined
+    let idleHandle: number | undefined
+    let fallbackTimer: number | undefined
     let stopped = false
+
     const connect = () => {
+      if (stopped) return
       source = openEvents(event => {
         try {
           if ((JSON.parse(event.data) as { type: string }).type !== 'heartbeat') {
-            fetchDashboard().then(setSnapshot).catch(() => setConnection('stale'))
+            fetchDashboard()
+              .then(dash => {
+                setSnapshot(dash)
+                writeCache({ snapshot: dash })
+              })
+              .catch(() => setConnection('stale'))
           }
         } catch {
           /* Ignore invalid event payloads. */
@@ -828,24 +931,21 @@ function Dashboard({ user, onLogout }: { user: AuthUser; onLogout: () => void })
         }
       })
     }
-    connect()
+
+    const ric = window.requestIdleCallback
+    if (typeof ric === 'function') {
+      idleHandle = ric.call(window, connect, { timeout: 1200 })
+    } else {
+      fallbackTimer = window.setTimeout(connect, 600)
+    }
+
     return () => {
       stopped = true
+      if (idleHandle !== undefined && typeof window.cancelIdleCallback === 'function') window.cancelIdleCallback(idleHandle)
+      if (fallbackTimer !== undefined) window.clearTimeout(fallbackTimer)
       source?.close()
       if (retry) window.clearTimeout(retry)
     }
-  }, [])
-
-  useEffect(() => {
-    let cancelled = false
-    fetchProfiles().then(result => {
-      const chosen = result.profiles.find(item => item.profileKey === 'desktop') ?? result.profiles[0]
-      if (chosen && !cancelled) {
-        setProfile(chosen)
-        writeCache({ profile: chosen })
-      }
-    }).catch(() => undefined)
-    return () => { cancelled = true }
   }, [])
 
   useEffect(() => {
@@ -856,19 +956,6 @@ function Dashboard({ user, onLogout }: { user: AuthUser; onLogout: () => void })
     }).catch(() => undefined)
     return () => { cancelled = true }
   }, [showCatalog, definitions.length])
-
-  useEffect(() => {
-    if (!profile) return
-    let cancelled = false
-    Promise.all([fetchWidgets(profile.id), fetchBookmarks(profile.id)]).then(([result, bookmarkResult]) => {
-      if (cancelled) return
-      const activeWidgets = result.widgets.filter(w => !deletedWidgetIdsRef.current.has(w.id))
-      setBookmarks(bookmarkResult.bookmarks)
-      setWidgets(activeWidgets)
-      writeCache({ widgets: activeWidgets, bookmarks: bookmarkResult.bookmarks })
-    }).catch(() => undefined)
-    return () => { cancelled = true }
-  }, [profile])
 
   const saveWidgets = useCallback((next: Widget[]) => {
     setWidgets(next)
@@ -1211,10 +1298,20 @@ function Dashboard({ user, onLogout }: { user: AuthUser; onLogout: () => void })
               ...(accentColor !== 'default' ? { '--accent': ACCENT_MAP[accentColor] ?? ACCENT_MAP.default, '--accent-soft': `${ACCENT_MAP[accentColor] ?? ACCENT_MAP.default}33` } as React.CSSProperties : {}),
             }
 
+            const isPerfWidget = widget.widgetType === 'homelab-performance' || widget.widgetType.startsWith('performance')
+            const isDashWidget = widget.widgetType.startsWith('notifications') || widget.widgetType === 'service-status'
+            const hasWidgetData = isPerfWidget ? Boolean(performance) : isDashWidget ? Boolean(snapshot) : true
+
             const props = {
               widgetId: widget.id,
               data,
-              state: connection === 'offline' ? 'offline' as const : connection === 'stale' ? 'stale' as const : snapshot ? 'ready' as const : 'loading' as const,
+              state: !hasWidgetData
+                ? (connection === 'offline' ? 'offline' as const : 'loading' as const)
+                : connection === 'offline'
+                  ? 'stale' as const
+                  : connection === 'stale'
+                    ? 'stale' as const
+                    : 'ready' as const,
               message: snapshot?.sourceStates?.notifications,
               editing,
               configuration: widget.configuration,
@@ -1607,19 +1704,42 @@ function WidgetCatalog({
 
 function App() {
   const [user, setUser] = useState<AuthUser | null>(() => readCache().user ?? null)
+  const [initialPayload, setInitialPayload] = useState<BootstrapPayload | null>(null)
   const [checking, setChecking] = useState(() => !readCache().user)
 
+  const savePayloadToCache = useCallback((payload: BootstrapPayload) => {
+    writeCache({
+      user: payload.user,
+      ...(payload.profile ? { profile: payload.profile } : {}),
+      widgets: payload.widgets,
+      bookmarks: payload.bookmarks,
+      ...(payload.snapshot ? { snapshot: payload.snapshot } : {}),
+      ...(payload.performance ? { performance: payload.performance } : {})
+    })
+  }, [])
+
   useEffect(() => {
-    getSession()
-      .then(result => {
-        setUser(result.user)
-        writeCache({ user: result.user })
+    if (!checking) return
+    consumeInitialBootstrap()
+      .then(payload => {
+        savePayloadToCache(payload)
+        setInitialPayload(payload)
+        setUser(payload.user)
       })
-      .catch(() => {
-        clearCache()
-        setUser(null)
+      .catch(err => {
+        if (err instanceof ApiError && err.status === 401) {
+          clearCache()
+          setInitialPayload(null)
+          setUser(null)
+        }
       })
       .finally(() => setChecking(false))
+  }, [checking, savePayloadToCache])
+
+  const handleUnauthenticated = useCallback(() => {
+    clearCache()
+    setInitialPayload(null)
+    setUser(null)
   }, [])
 
   if (checking) {
@@ -1637,8 +1757,16 @@ function App() {
     return (
       <LoginScreen
         onAuthenticated={authenticatedUser => {
-          writeCache({ user: authenticatedUser })
-          setUser(authenticatedUser)
+          fetchBootstrap('desktop')
+            .then(payload => {
+              savePayloadToCache(payload)
+              setInitialPayload(payload)
+              setUser(payload.user)
+            })
+            .catch(() => {
+              writeCache({ user: authenticatedUser })
+              setUser(authenticatedUser)
+            })
         }}
       />
     )
@@ -1647,8 +1775,11 @@ function App() {
   return (
     <Dashboard
       user={user}
+      initialPayload={initialPayload}
+      onUnauthenticated={handleUnauthenticated}
       onLogout={async () => {
         clearCache()
+        setInitialPayload(null)
         await logout().catch(() => undefined)
         setUser(null)
       }}

@@ -132,3 +132,40 @@ test('widget deletion succeeds without body and bookmarks scope to widgetId', as
     assert.equal(bmRes.json().widgetId, widgetId)
   }, deps)
 })
+
+test('bootstrap endpoint aggregates session, profile, widgets, bookmarks and conditional snapshots in one request', async () => {
+  const profile = { id: 'profile-desktop', dashboardId: 'dash-1', profileKey: 'desktop' as const, layoutVersion: 1 }
+  const widgets = [
+    { id: 'w-1', widgetType: 'notifications', widgetVersion: 1, configuration: {}, layout: { x: 0, y: 0, width: 4, height: 3 }, isEnabled: true },
+    { id: 'w-2', widgetType: 'homelab-performance', widgetVersion: 1, configuration: {}, layout: { x: 4, y: 0, width: 4, height: 3 }, isEnabled: true },
+  ]
+  const bookmarks = [{ id: 'b-1', widgetId: null, name: 'Proxmox', url: 'https://proxmox.local', sortOrder: 0 }]
+  const deps = dependencies({
+    dashboard: {
+      ...dependencies().dashboard,
+      listProfiles: async () => [profile],
+      listWidgets: async () => widgets,
+      listBookmarks: async () => bookmarks,
+    } as unknown as AppDependencies['dashboard'],
+  })
+
+  await withApp(async (app) => {
+    const unauth = await app.inject({ method: 'GET', url: '/api/v1/bootstrap?profile=desktop' })
+    assert.equal(unauth.statusCode, 401)
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/v1/bootstrap?profile=desktop',
+      headers: { cookie: `${SESSION_COOKIE}=${session.token}` },
+    })
+    assert.equal(res.statusCode, 200)
+    const body = res.json()
+    assert.equal(body.user.username, user.username)
+    assert.equal(body.csrfToken, session.csrfToken)
+    assert.equal(body.profile.id, 'profile-desktop')
+    assert.equal(body.widgets.length, 2)
+    assert.equal(body.bookmarks.length, 1)
+    assert.ok(body.snapshot)
+    assert.ok(body.performance)
+  }, deps)
+})

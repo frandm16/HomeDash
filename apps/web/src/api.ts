@@ -12,6 +12,23 @@ export type WidgetDefinition = { type: string; version: number; defaultConfigura
 export type DashboardProfile = { id: string; dashboardId?: string; profileKey: 'desktop' | 'wall' | 'mobile'; layoutVersion: number }
 export type Bookmark = { id: string; widgetId?: string | null; name: string; url: string; icon?: string; category?: string; sortOrder: number }
 export type AuthUser = { id: string; username: string }
+export type BootstrapPayload = {
+  user: AuthUser
+  expiresAt: string
+  csrfToken: string
+  profile: DashboardProfile | null
+  widgets: Widget[]
+  bookmarks: Bookmark[]
+  snapshot: DashboardSnapshot | null
+  performance: PerformanceSnapshot | null
+}
+export class ApiError extends Error {
+  status: number
+  constructor(status: number) {
+    super(`API returned ${status}`)
+    this.status = status
+  }
+}
 let csrfToken: string | undefined
 export function setCsrfToken(token?: string): void { csrfToken = token }
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? '/api'
@@ -20,8 +37,27 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   if (init?.body !== undefined && !headers['Content-Type']) headers['Content-Type'] = 'application/json'
   if (csrfToken && init?.method && init.method !== 'GET') headers['X-CSRF-Token'] = csrfToken
   const response = await fetch(`${apiBaseUrl}${path}`, { ...init, credentials: 'include', headers })
-  if (!response.ok) throw new Error(`API returned ${response.status}`)
+  if (!response.ok) throw new ApiError(response.status)
   return response.json() as Promise<T>
+}
+export function fetchBootstrap(profile: 'desktop' | 'wall' | 'mobile' = 'desktop', signal?: AbortSignal): Promise<BootstrapPayload> {
+  return request<BootstrapPayload>(`/v1/bootstrap?profile=${profile}`, { signal }).then((result) => {
+    setCsrfToken(result.csrfToken)
+    return result
+  })
+}
+let initialBootstrapPromise: Promise<BootstrapPayload> | null = null
+if (typeof window !== 'undefined') {
+  initialBootstrapPromise = fetchBootstrap('desktop')
+  initialBootstrapPromise.catch(() => undefined)
+}
+export function consumeInitialBootstrap(): Promise<BootstrapPayload> {
+  if (initialBootstrapPromise) {
+    const pending = initialBootstrapPromise
+    initialBootstrapPromise = null
+    return pending
+  }
+  return fetchBootstrap('desktop')
 }
 export function getSession(): Promise<{ user: AuthUser; expiresAt: string; csrfToken: string }> { return request<{ user: AuthUser; expiresAt: string; csrfToken: string }>('/v1/auth/session').then((result) => { setCsrfToken(result.csrfToken); return result }) }
 export function login(username: string, password: string): Promise<{ user: AuthUser; csrfToken: string }> { return request<{ user: AuthUser; csrfToken: string }>('/v1/auth/login', { method: 'POST', body: JSON.stringify({ username, password }) }).then((result) => { setCsrfToken(result.csrfToken); return result }) }

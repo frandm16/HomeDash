@@ -1,13 +1,17 @@
 import { useMemo, useState, type FormEvent } from 'react'
 import {
   createBookmark,
+  searchWeatherLocations,
   updateBookmark,
   type Bookmark,
+  type WeatherLocationResult,
   type Widget,
   type WidgetDefinition as ApiWidgetDefinition
 } from './api'
 import { Icon, type IconName } from './Icon'
-import { BookmarkFavicon, widgetRegistry, type WidgetData } from './widgets'
+import { widgetRegistry } from './widgets/registry'
+import { BookmarkFavicon } from './widgets/shared'
+import type { WidgetData } from './widgets/types'
 import './EditOverlays.css'
 
 const PRESET_EMOJIS = ['🌐', '🚀', '💻', '🏠', '📦', '📊', '⚡', '🔒', '🎬', '🎮', '⚙️', '📁', '🐳', '🛡️', '📈', '🗄️']
@@ -164,6 +168,27 @@ export function WidgetSettings({
   const isClock = type === 'clock-hero'
   const isCountdown = type === 'countdown-event'
   const isStickyNote = type === 'sticky-note'
+  const isWeather = type === 'weather-forecast'
+  const isEnvironment = type === 'environment-sensor'
+  const usesWeatherLocation = isWeather || isEnvironment
+
+  const [locationQuery, setLocationQuery] = useState('')
+  const [locationResults, setLocationResults] = useState<WeatherLocationResult[]>([])
+  const [searchingLocation, setSearchingLocation] = useState(false)
+
+  const handleLocationSearch = async () => {
+    const q = locationQuery.trim()
+    if (q.length < 2) return
+    setSearchingLocation(true)
+    try {
+      const res = await searchWeatherLocations(q)
+      setLocationResults(res.locations)
+    } catch {
+      setLocationResults([])
+    } finally {
+      setSearchingLocation(false)
+    }
+  }
 
   const widgetBookmarks = useMemo(
     () => (isBookmarks ? data.bookmarks.filter(b => b.widgetId === widget.id) : data.bookmarks),
@@ -457,6 +482,124 @@ export function WidgetSettings({
               </>
             )}
 
+            {usesWeatherLocation && (
+              <>
+                <label>Find City (Open-Meteo)
+                  <div className="location-search-row">
+                    <input
+                      value={locationQuery}
+                      onChange={e => setLocationQuery(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); void handleLocationSearch() } }}
+                      placeholder="e.g. Sevilla, Madrid, London"
+                    />
+                    <button
+                      type="button"
+                      className="button button-quiet"
+                      onClick={() => void handleLocationSearch()}
+                      disabled={searchingLocation}
+                    >
+                      {searchingLocation ? '…' : 'Search'}
+                    </button>
+                  </div>
+                </label>
+                {locationResults.length > 0 && (
+                  <div className="location-results-list">
+                    {locationResults.map(loc => (
+                      <button
+                        key={`${loc.name}-${loc.latitude}-${loc.longitude}`}
+                        type="button"
+                        className="location-result-btn"
+                        onClick={() => {
+                          setConfig(prev => ({
+                            ...prev,
+                            locationName: loc.name,
+                            latitude: loc.latitude,
+                            longitude: loc.longitude
+                          }))
+                          setLocationResults([])
+                          setLocationQuery('')
+                        }}
+                      >
+                        <strong>{loc.name}</strong>
+                        <small>{[loc.admin1, loc.country].filter(Boolean).join(', ')} ({loc.latitude}, {loc.longitude})</small>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <label>Location Label
+                  <input
+                    value={String(config.locationName ?? 'Madrid')}
+                    onChange={e => setConfig(prev => ({ ...prev, locationName: e.target.value }))}
+                  />
+                </label>
+                <div className="coord-inputs-row">
+                  <label>Latitude
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="-90"
+                      max="90"
+                      value={Number(config.latitude ?? 40.42)}
+                      onChange={e => setConfig(prev => ({ ...prev, latitude: Number(e.target.value) }))}
+                    />
+                  </label>
+                  <label>Longitude
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="-180"
+                      max="180"
+                      value={Number(config.longitude ?? -3.7)}
+                      onChange={e => setConfig(prev => ({ ...prev, longitude: Number(e.target.value) }))}
+                    />
+                  </label>
+                </div>
+                <label>Units
+                  <select
+                    value={String(config.units ?? 'metric')}
+                    onChange={e => setConfig(prev => ({ ...prev, units: e.target.value }))}
+                  >
+                    <option value="metric">Metric (°C, km/h)</option>
+                    <option value="imperial">Imperial (°F, mph)</option>
+                  </select>
+                </label>
+                {isWeather && (
+                  <label>Weather Layout
+                    <select
+                      value={String(config.weatherStyle ?? 'card-detailed')}
+                      onChange={e => setConfig(prev => ({ ...prev, weatherStyle: e.target.value }))}
+                    >
+                      <option value="card-detailed">Detailed Card (High/Low, Wind & Rain)</option>
+                      <option value="card-compact">Compact Tile (Ideal for 1×1 / 2×1)</option>
+                      <option value="hourly-forecast">12-Hour Forecast Strip</option>
+                    </select>
+                  </label>
+                )}
+                {isEnvironment && (
+                  <>
+                    <label>Sensor Visual Style
+                      <select
+                        value={String(config.sensorStyle ?? 'radial-gauge')}
+                        onChange={e => setConfig(prev => ({ ...prev, sensorStyle: e.target.value }))}
+                      >
+                        <option value="radial-gauge">Radial Humidity Gauge</option>
+                        <option value="compact-chip">Compact Humidity Chip</option>
+                        <option value="dual-sensor">Dual Sensor (Temp + Humidity)</option>
+                      </select>
+                    </label>
+                    <label className="check-label">
+                      <input
+                        type="checkbox"
+                        checked={config.showComfortIndex !== false}
+                        onChange={e => setConfig(prev => ({ ...prev, showComfortIndex: e.target.checked }))}
+                      />
+                      Show comfort index badge (Dry / Optimal / Humid)
+                    </label>
+                  </>
+                )}
+              </>
+            )}
+
             <div className="settings-section-divider"/>
             <p className="kicker">APPEARANCE</p>
             <label>Card Background
@@ -526,7 +669,7 @@ export function WidgetSettings({
   )
 }
 
-type CatalogCategory = 'all' | 'time' | 'notifications' | 'bookmarks' | 'search' | 'system'
+type CatalogCategory = 'all' | 'weather' | 'time' | 'notifications' | 'bookmarks' | 'search' | 'system'
 
 type CatalogEntryMeta = {
   category: CatalogCategory
@@ -648,6 +791,20 @@ const CATALOG_METADATA: Record<string, CatalogEntryMeta> = {
     subtitle: 'Scratchpad or Tasks',
     description: 'Jot down commands, homelab IP notes, or interactive todo items directly on your canvas.',
     icon: 'edit'
+  },
+  'weather-forecast': {
+    category: 'weather',
+    title: 'Weather & Forecast',
+    subtitle: 'Current Sky & 12h Strip',
+    description: 'Live temperature, wind, precipitation chance, and hourly forecast powered by Open-Meteo.',
+    icon: 'activity'
+  },
+  'environment-sensor': {
+    category: 'weather',
+    title: 'Humidity & Comfort',
+    subtitle: 'Environmental Gauge',
+    description: 'Relative humidity dial, dew point, and comfort index badge for outdoor or room monitoring.',
+    icon: 'activity'
   }
 }
 
@@ -668,6 +825,7 @@ export function WidgetCatalog({
 
   const categories: { key: CatalogCategory; label: string }[] = [
     { key: 'all', label: 'All widgets' },
+    { key: 'weather', label: 'Weather' },
     { key: 'time', label: 'Time & Notes' },
     { key: 'notifications', label: 'Notifications' },
     { key: 'bookmarks', label: 'Bookmarks' },

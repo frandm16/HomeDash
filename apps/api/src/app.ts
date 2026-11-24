@@ -14,6 +14,7 @@ import { createService, deleteService, listAllServices, listServices, updateServ
 import { checkServices } from './adapters/service-health.js'
 import { collectPerformanceSnapshot } from './adapters/performance.js'
 import { createFaviconService, isPublicFaviconDomain } from './adapters/favicons.js'
+import { createWeatherService, isValidCoordinates } from './adapters/weather.js'
 import { createDevelopmentSources, createSnapshotService } from './snapshot.js'
 import * as authService from './auth.js'
 import { recordAudit as defaultRecordAudit } from './infrastructure/audit.js'
@@ -52,6 +53,7 @@ export async function buildApp(dependencies: AppDependencies = {}): Promise<Fast
   })
   const snapshotService = createSnapshotService(createDevelopmentSources())
   const faviconService = createFaviconService()
+  const weatherService = createWeatherService()
 
   app.addHook('onResponse', async (request, reply) => {
     const route = request.routeOptions.url ?? 'unknown'
@@ -260,6 +262,34 @@ export async function buildApp(dependencies: AppDependencies = {}): Promise<Fast
     }
   })
   app.get('/api/v1/performance', async () => collectPerformanceSnapshot())
+  app.get('/api/v1/weather', async (request, reply) => {
+    const query = request.query as { lat?: string; lon?: string; units?: string }
+    const lat = Number(query.lat)
+    const lon = Number(query.lon)
+    if (!isValidCoordinates(lat, lon)) {
+      return reply.code(400).send({ error: { code: 'INVALID_COORDINATES', message: 'Valid lat and lon are required', requestId: request.id } })
+    }
+    const units = query.units === 'imperial' ? 'imperial' : 'metric'
+    try {
+      return await weatherService.getWeather(lat, lon, units)
+    } catch (error) {
+      app.log.error(error)
+      return reply.code(502).send({ error: { code: 'WEATHER_UNAVAILABLE', message: 'Weather provider unavailable', requestId: request.id } })
+    }
+  })
+  app.get('/api/v1/weather/locations', async (request, reply) => {
+    const query = request.query as { q?: string }
+    const search = (query.q ?? '').trim()
+    if (search.length < 2 || search.length > 80) {
+      return { locations: [] }
+    }
+    try {
+      return { locations: await weatherService.searchLocations(search) }
+    } catch (error) {
+      app.log.error(error)
+      return reply.code(502).send({ error: { code: 'WEATHER_UNAVAILABLE', message: 'Geocoding provider unavailable', requestId: request.id } })
+    }
+  })
   app.get('/api/v1/favicons', async (request, reply) => {
     const query = request.query as { domain?: string }
     const domain = (query.domain ?? '').trim().toLowerCase()

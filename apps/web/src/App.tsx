@@ -26,7 +26,8 @@ import {
 } from './api'
 import { findOpenLayout, GRID_COLUMNS, GRID_ROWS, moveWidget } from './grid'
 import { Icon } from './Icon'
-import { widgetRegistry, type WidgetData, type WidgetRenderProps } from './widgets'
+import { widgetRegistry } from './widgets/registry'
+import type { WidgetData, WidgetRenderProps } from './widgets/types'
 import './App.css'
 
 type ToastState = 'saved' | 'saving' | 'error'

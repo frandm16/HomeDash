@@ -2596,3 +2596,266 @@ select:focus-visible, textarea:focus-visible {
   padding: 5px 12px;
   font-size: 12px;
 }
+
+
+/* =========================================================================
+   WEATHER & ENVIRONMENT SENSOR WIDGETS
+   ========================================================================= */
+
+.weather-widget,
+.env-sensor-widget {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 10px;
+}
+
+.weather-detailed-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.weather-main-temp-block {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.weather-location {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: #dce8f8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.weather-hero-temp {
+  font-size: 32px;
+  line-height: 1.05;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: -0.03em;
+}
+
+.weather-desc {
+  font-size: 11px;
+  color: #b7c8dd;
+}
+
+.weather-hero-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+}
+
+.weather-stats-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.weather-stat-chip {
+  font: 10px var(--mono);
+  color: #d6e4f5;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: var(--inner-bg);
+  border: 1px solid var(--inner-border);
+}
+
+.weather-widget.style-card-compact {
+  align-items: center;
+  text-align: center;
+  gap: 6px;
+}
+
+.weather-compact-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.weather-compact-temp {
+  font-size: 24px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.weather-compact-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.weather-compact-meta small {
+  font-size: 10px;
+  color: #b7c8dd;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.weather-widget.style-hourly-forecast {
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.weather-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.weather-header-row > div {
+  display: flex;
+  flex-direction: column;
+}
+
+.weather-header-temp {
+  flex-direction: row !important;
+  align-items: center;
+  gap: 6px;
+  font-size: 18px;
+  color: #fff;
+}
+
+.weather-hourly-strip {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+  scrollbar-width: thin;
+}
+
+.weather-hour-pill {
+  flex: 0 0 auto;
+  min-width: 48px;
+  padding: 6px 5px;
+  border-radius: 14px;
+  background: var(--inner-bg);
+  border: 1px solid var(--inner-border);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+
+.weather-hour-pill .hour-time {
+  font: 9px var(--mono);
+  color: #b7c8dd;
+}
+
+.weather-hour-pill .hour-temp {
+  font-size: 12px;
+  color: #fff;
+}
+
+.weather-hour-pill .hour-rain {
+  font: 9px var(--mono);
+  color: #7cc4ff;
+}
+
+.env-sensor-widget.style-radial-gauge {
+  align-items: center;
+}
+
+.env-sensor-widget.style-compact-chip {
+  align-items: center;
+  text-align: center;
+  gap: 6px;
+}
+
+.env-chip-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.env-chip-value {
+  font-size: 24px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.env-chip-sub {
+  font-size: 10px;
+  color: #b7c8dd;
+}
+
+.env-comfort-badge {
+  font: 9px var(--mono);
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.env-comfort-badge.tone-optimal {
+  background: rgba(52, 211, 153, 0.18);
+  color: #86efac;
+  border-color: rgba(52, 211, 153, 0.35);
+}
+
+.env-comfort-badge.tone-dry {
+  background: rgba(251, 191, 36, 0.18);
+  color: #fde68a;
+  border-color: rgba(251, 191, 36, 0.35);
+}
+
+.env-comfort-badge.tone-humid {
+  background: rgba(34, 211, 238, 0.18);
+  color: #a5f3fc;
+  border-color: rgba(34, 211, 238, 0.35);
+}
+
+.env-dual-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #dce8f8;
+}
+
+.env-dual-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.env-dual-tile {
+  padding: 10px 8px;
+  border-radius: 16px;
+  background: var(--inner-bg);
+  border: 1px solid var(--inner-border);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.env-dual-label {
+  font: 9px var(--mono);
+  color: #9fb0c5;
+}
+
+.env-dual-val {
+  font-size: 20px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.env-dual-val.humidity {
+  color: #67e8f9;
+}

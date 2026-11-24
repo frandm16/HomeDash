@@ -12,6 +12,19 @@ export type WidgetDefinition = { type: string; version: number; defaultConfigura
 export type DashboardProfile = { id: string; dashboardId?: string; profileKey: 'desktop' | 'wall' | 'mobile'; layoutVersion: number }
 export type Bookmark = { id: string; widgetId?: string | null; name: string; url: string; icon?: string; category?: string; sortOrder: number }
 export type AuthUser = { id: string; username: string }
+export type WeatherUnits = 'metric' | 'imperial'
+export type WeatherHourlyPoint = { time: string; temperature: number; weatherCode: number; precipitationProbability: number | null; humidity: number | null }
+export type WeatherSnapshot = {
+  latitude: number
+  longitude: number
+  units: WeatherUnits
+  timezone: string
+  current: { temperature: number; apparentTemperature: number; humidity: number; dewPoint: number | null; windSpeed: number; weatherCode: number; isDay: boolean }
+  daily: { tempMax: number | null; tempMin: number | null; precipitationProbabilityMax: number | null }
+  hourly: WeatherHourlyPoint[]
+  fetchedAt: string
+}
+export type WeatherLocationResult = { name: string; country: string; admin1?: string; latitude: number; longitude: number }
 export type BootstrapPayload = {
   user: AuthUser
   expiresAt: string
@@ -64,6 +77,12 @@ export function login(username: string, password: string): Promise<{ user: AuthU
 export function logout(): Promise<{ ok: boolean }> { return request<{ ok: boolean }>('/v1/auth/logout', { method: 'POST' }).finally(() => setCsrfToken(undefined)) }
 export function fetchDashboard(signal?: AbortSignal): Promise<DashboardSnapshot> { return request('/v1/dashboard', { signal }) }
 export function fetchPerformance(signal?: AbortSignal): Promise<PerformanceSnapshot> { return request('/v1/performance', { signal }) }
+export function fetchWeather(lat: number, lon: number, units: WeatherUnits = 'metric', signal?: AbortSignal): Promise<WeatherSnapshot> {
+  return request(`/v1/weather?lat=${encodeURIComponent(String(lat))}&lon=${encodeURIComponent(String(lon))}&units=${units}`, { signal })
+}
+export function searchWeatherLocations(query: string, signal?: AbortSignal): Promise<{ locations: WeatherLocationResult[] }> {
+  return request(`/v1/weather/locations?q=${encodeURIComponent(query)}`, { signal })
+}
 export function fetchProfiles(): Promise<{ profiles: DashboardProfile[] }> { return request('/v1/profiles') }
 export function fetchWidgetDefinitions(): Promise<{ widgets: WidgetDefinition[] }> { return request('/v1/widgets/definitions') }
 export function fetchWidgets(profileId: string): Promise<{ widgets: Widget[] }> { return request(`/v1/profiles/${profileId}/widgets`) }

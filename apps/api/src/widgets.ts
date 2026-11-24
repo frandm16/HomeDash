@@ -36,6 +36,10 @@ const definitions: WidgetDefinition[] = [
   { type: 'clock-hero', version: 1, defaultConfiguration: { clockStyle: 'digital-modern', showSeconds: false, format24h: true }, minSize: { w: 1, h: 1 }, initialSize: { w: 3, h: 2 }, permissions: [] },
   { type: 'countdown-event', version: 1, defaultConfiguration: { title: 'Target Event', targetDate: '', icon: '🎯', countdownStyle: 'hero-counter' }, minSize: { w: 1, h: 1 }, initialSize: { w: 3, h: 2 }, permissions: [] },
   { type: 'sticky-note', version: 1, defaultConfiguration: { noteType: 'text', content: '', pinColor: 'blue' }, minSize: { w: 1, h: 1 }, initialSize: { w: 2, h: 2 }, permissions: [] },
+
+  // Weather & Environment (Phase A)
+  { type: 'weather-forecast', version: 1, defaultConfiguration: { locationName: 'Madrid', latitude: 40.42, longitude: -3.7, units: 'metric', weatherStyle: 'card-detailed' }, minSize: { w: 1, h: 1 }, initialSize: { w: 3, h: 2 }, permissions: [], refreshIntervalMs: 900_000 },
+  { type: 'environment-sensor', version: 1, defaultConfiguration: { locationName: 'Madrid', latitude: 40.42, longitude: -3.7, units: 'metric', source: 'open-meteo', showComfortIndex: true, sensorStyle: 'radial-gauge' }, minSize: { w: 1, h: 1 }, initialSize: { w: 2, h: 2 }, permissions: [], refreshIntervalMs: 900_000 },
 ]
 
 export function listWidgetDefinitions(): WidgetDefinition[] { return definitions }

@@ -4,9 +4,15 @@ import type { DashboardNotification, DashboardSnapshot, ServiceSummary } from '.
 import { config } from './config.js'
 import { listServices } from './infrastructure/db/repositories/services.js'
 import { checkServices } from './adapters/service-health.js'
+import { publishEvent } from './infrastructure/events.js'
 
 type SnapshotSources = {
   notifications: NotificationCenterAdapter
+}
+
+type SnapshotOptions = {
+  freshTtlMs?: number
+  maxStaleMs?: number
 }
 
 const fallbackNotifications: DashboardNotification[] = [
@@ -53,33 +59,101 @@ const createFallbackAdapter = (): NotificationCenterAdapter => ({
   },
 })
 
-export const createSnapshotService = (sources: SnapshotSources) => ({
-  async getSnapshot(): Promise<DashboardSnapshot> {
-    const [notificationsResult, unreadResult] = await Promise.allSettled([
-      sources.notifications.getNotifications(),
-      sources.notifications.getUnreadCount(),
+export const createSnapshotService = (sources: SnapshotSources, options: SnapshotOptions = {}) => {
+  const freshTtlMs = options.freshTtlMs ?? 10_000
+  const maxStaleMs = options.maxStaleMs ?? 120_000
+  let cached: { snapshot: DashboardSnapshot; fetchedAt: number } | null = null
+  let inFlight: Promise<DashboardSnapshot> | null = null
+
+  async function computeSnapshot(): Promise<DashboardSnapshot> {
+    const [notificationsResult, unreadResult, servicesOutcome] = await Promise.all([
+      sources.notifications.getNotifications().then(
+        value => ({ ok: true as const, value }),
+        () => ({ ok: false as const, value: [] as DashboardNotification[] })
+      ),
+      sources.notifications.getUnreadCount().then(
+        value => ({ ok: true as const, value }),
+        () => ({ ok: false as const, value: -1 })
+      ),
+      (async () => {
+        try {
+          const configured = await listServices()
+          const results = await checkServices(
+            configured
+              .filter((service) => service.healthcheckUrl)
+              .map((service) => ({ id: service.id, url: service.healthcheckUrl! }))
+          )
+          const health = new Map(results.map((result) => [result.id, result]))
+          const mapped: ServiceSummary[] = configured.map((service) => ({
+            name: service.name,
+            description: service.description,
+            url: service.url,
+            host: service.host ?? '',
+            status: health.get(service.id)?.status ?? 'unknown',
+          }))
+          return { services: mapped, state: 'ready' as const }
+        } catch {
+          return { services: fallbackServices, state: 'offline' as const }
+        }
+      })(),
     ])
-    const notifications = notificationsResult.status === 'fulfilled' ? notificationsResult.value : []
-    const unreadNotifications = unreadResult.status === 'fulfilled' ? unreadResult.value : notifications.filter((notification) => !notification.read).length
-    const notificationsReady = notificationsResult.status === 'fulfilled' || unreadResult.status === 'fulfilled'
-    let services = fallbackServices
-    let servicesReady: 'ready' | 'offline' | 'not_configured' = 'not_configured'
-    try {
-      const configured = await listServices()
-      const results = await checkServices(configured.filter((service) => service.healthcheckUrl).map((service) => ({ id: service.id, url: service.healthcheckUrl! })))
-      const health = new Map(results.map((result) => [result.id, result]))
-      services = configured.map((service) => ({ name: service.name, description: service.description, url: service.url, host: service.host ?? '', status: health.get(service.id)?.status ?? 'unknown' }))
-      servicesReady = 'ready'
-    } catch { servicesReady = 'offline' }
+
+    const notifications = notificationsResult.value
+    const unreadNotifications = unreadResult.ok
+      ? unreadResult.value
+      : notifications.filter((notification) => !notification.read).length
+    const notificationsReady = notificationsResult.ok || unreadResult.ok
+
     return {
-      services,
+      services: servicesOutcome.services,
       notifications,
       unreadNotifications,
       generatedAt: new Date().toISOString(),
-      sourceStates: { notifications: notificationsReady ? 'ready' : 'offline', services: servicesReady },
+      sourceStates: {
+        notifications: notificationsReady ? 'ready' : 'offline',
+        services: servicesOutcome.state,
+      },
     }
-  },
-})
+  }
+
+  function revalidate(notifyOnChange: boolean): Promise<DashboardSnapshot> {
+    if (inFlight) return inFlight
+    const previous = cached?.snapshot
+    inFlight = computeSnapshot()
+      .then((next) => {
+        cached = { snapshot: next, fetchedAt: Date.now() }
+        if (notifyOnChange && previous) {
+          if (previous.unreadNotifications !== next.unreadNotifications || previous.notifications[0]?.id !== next.notifications[0]?.id) {
+            publishEvent({ type: 'notification.created', source: 'snapshot' })
+          } else if (JSON.stringify(previous.services) !== JSON.stringify(next.services)) {
+            publishEvent({ type: 'service.status.changed', source: 'snapshot' })
+          }
+        }
+        return next
+      })
+      .finally(() => {
+        inFlight = null
+      })
+    return inFlight
+  }
+
+  return {
+    async getSnapshot(): Promise<DashboardSnapshot> {
+      const now = Date.now()
+      if (cached) {
+        const age = now - cached.fetchedAt
+        if (age < freshTtlMs) {
+          return cached.snapshot
+        }
+        if (age < maxStaleMs) {
+          void revalidate(true).catch(() => undefined)
+          return cached.snapshot
+        }
+      }
+      return revalidate(false)
+    },
+  }
+}
 
 export const createDevelopmentSources = (): SnapshotSources => {
   const baseUrl = process.env.NOTIFICATION_CENTER_URL

@@ -77,25 +77,34 @@ function getRamMetric(): { percent: number; detail: string } {
   }
 }
 
-function getDiskMetric(): { percent: number; detail: string } {
+const DISK_CACHE_TTL_MS = 60_000
+let cachedDiskMetric: { value: { percent: number; detail: string }; fetchedAt: number } | null = null
+
+async function getDiskMetric(): Promise<{ percent: number; detail: string }> {
+  const now = Date.now()
+  if (cachedDiskMetric && now - cachedDiskMetric.fetchedAt < DISK_CACHE_TTL_MS) {
+    return cachedDiskMetric.value
+  }
   try {
-    if (typeof fs.statfsSync === 'function') {
-      const stats = fs.statfsSync(process.platform === 'win32' ? 'C:\\' : '/')
+    if (typeof fs.promises.statfs === 'function') {
+      const stats = await fs.promises.statfs(process.platform === 'win32' ? 'C:\\' : '/')
       const total = stats.blocks * stats.bsize
       const free = stats.bfree * stats.bsize
       const used = total - free
       const percent = total > 0 ? Math.round((used / total) * 100) : 0
       const usedGb = Math.round(used / (1024 * 1024 * 1024))
       const totalGb = Math.round(total / (1024 * 1024 * 1024))
-      return {
+      const value = {
         percent: Math.min(100, Math.max(0, percent)),
         detail: `${usedGb} / ${totalGb} GB`,
       }
+      cachedDiskMetric = { value, fetchedAt: now }
+      return value
     }
   } catch {
     // Fallback if statfs is unavailable
   }
-  return { percent: 45, detail: '45% used' }
+  return cachedDiskMetric?.value ?? { percent: 45, detail: '45% used' }
 }
 
 // Simulated smooth GPU metric when no discrete GPU sensor is configured
@@ -125,7 +134,7 @@ initHistoryBuffer()
 export async function collectPerformanceSnapshot(): Promise<PerformanceSnapshot> {
   const cpuPercent = calculateCpuPercent()
   const ram = getRamMetric()
-  const disk = getDiskMetric()
+  const disk = await getDiskMetric()
   const gpuPercent = getGpuPercent()
   const nowIso = new Date().toISOString()
 

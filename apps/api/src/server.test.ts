@@ -22,3 +22,23 @@ test('dashboard snapshot exposes the normalized service and notification contrac
   assert.equal(snapshot.unreadNotifications, 1)
   assert.equal(snapshot.notifications[0]?.level, 'SUCCESS')
 })
+
+test('snapshot service deduplicates concurrent calls and serves stale-while-revalidate from memory', async () => {
+  let calls = 0
+  const source = {
+    getNotifications: async () => {
+      calls += 1
+      await new Promise(resolve => setTimeout(resolve, 15))
+      return []
+    },
+    getUnreadCount: async () => 0,
+  }
+  const service = createSnapshotService({ notifications: source }, { freshTtlMs: 50, maxStaleMs: 500 })
+  const [first, second] = await Promise.all([service.getSnapshot(), service.getSnapshot()])
+  assert.equal(calls, 1)
+  assert.equal(first.generatedAt, second.generatedAt)
+
+  const cached = await service.getSnapshot()
+  assert.equal(calls, 1)
+  assert.equal(cached.generatedAt, first.generatedAt)
+})

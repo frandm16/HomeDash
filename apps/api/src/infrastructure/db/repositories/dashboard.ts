@@ -42,8 +42,30 @@ export async function deleteDashboard(userId: string, id: string): Promise<boole
 }
 
 export async function listProfiles(userId: string, dashboardId?: string) {
-  const id = dashboardId ?? await ensureDashboard(userId)
-  return (await pool.query(`SELECT p.id, p.dashboard_id AS "dashboardId", p.profile_key AS "profileKey", p.layout_version AS "layoutVersion", p.created_at AS "createdAt", p.updated_at AS "updatedAt" FROM dashboard_profiles p JOIN dashboards d ON d.id = p.dashboard_id WHERE d.user_id = $1 AND d.id = $2 ORDER BY p.profile_key`, [userId, id])).rows
+  if (dashboardId) {
+    return (await pool.query(
+      `SELECT p.id, p.dashboard_id AS "dashboardId", p.profile_key AS "profileKey", p.layout_version AS "layoutVersion", p.created_at AS "createdAt", p.updated_at AS "updatedAt"
+       FROM dashboard_profiles p JOIN dashboards d ON d.id = p.dashboard_id
+       WHERE d.user_id = $1 AND d.id = $2 ORDER BY p.profile_key`,
+      [userId, dashboardId]
+    )).rows
+  }
+
+  const existing = (await pool.query(
+    `SELECT p.id, p.dashboard_id AS "dashboardId", p.profile_key AS "profileKey", p.layout_version AS "layoutVersion", p.created_at AS "createdAt", p.updated_at AS "updatedAt"
+     FROM dashboard_profiles p JOIN dashboards d ON d.id = p.dashboard_id
+     WHERE d.user_id = $1 AND d.is_default = TRUE ORDER BY p.profile_key`,
+    [userId]
+  )).rows
+  if (existing.length > 0) return existing
+
+  const ensuredId = await ensureDashboard(userId)
+  return (await pool.query(
+    `SELECT p.id, p.dashboard_id AS "dashboardId", p.profile_key AS "profileKey", p.layout_version AS "layoutVersion", p.created_at AS "createdAt", p.updated_at AS "updatedAt"
+     FROM dashboard_profiles p JOIN dashboards d ON d.id = p.dashboard_id
+     WHERE d.user_id = $1 AND d.id = $2 ORDER BY p.profile_key`,
+    [userId, ensuredId]
+  )).rows
 }
 
 export async function updateProfile(userId: string, profileId: string, input: { layoutVersion?: number }) {

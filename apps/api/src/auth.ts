@@ -11,6 +11,9 @@ const sessionTtlMs = config.sessionTtlDays * 24 * 60 * 60 * 1000
 type User = { id: string; username: string; isAdmin?: boolean }
 type Session = { user: User; token: string; expiresAt: Date; lastSeenAt: Date; csrfToken: string; csrfTokenHash: string }
 const sessionTouchIntervalMs = 15 * 60 * 1000
+const SESSION_CACHE_TTL_MS = 3_000
+const MAX_CACHED_SESSIONS = 256
+const sessionCache = new Map<string, { session: Session; cachedAt: number }>()
 
 declare module 'fastify' {
   interface FastifyRequest { auth?: Session }
@@ -60,16 +63,34 @@ export async function createSession(user: User): Promise<Session> {
 
 export async function getSession(token: string | undefined): Promise<Session | null> {
   if (!token) return null
+  const tokenHash = hashToken(token)
+  const now = Date.now()
+  const cached = sessionCache.get(tokenHash)
+  if (cached) {
+    if (now - cached.cachedAt < SESSION_CACHE_TTL_MS && cached.session.expiresAt.getTime() > now) {
+      return cached.session
+    }
+    sessionCache.delete(tokenHash)
+  }
+
   const result = await pool.query<{ user_id: string; username: string; is_admin: boolean; expires_at: Date; last_seen_at: Date; csrf_token_hash: string }>(
     `SELECT users.id AS user_id, users.username, users.is_admin, sessions.expires_at, sessions.last_seen_at, sessions.csrf_token_hash FROM sessions JOIN users ON users.id = sessions.user_id
-     WHERE sessions.token_hash = $1 AND sessions.revoked_at IS NULL AND sessions.expires_at > NOW() AND users.is_active = TRUE`, [hashToken(token)],
+     WHERE sessions.token_hash = $1 AND sessions.revoked_at IS NULL AND sessions.expires_at > NOW() AND users.is_active = TRUE`, [tokenHash],
   )
   const row = result.rows[0]
   if (!row) return null
-  if (Date.now() - row.last_seen_at.getTime() >= sessionTouchIntervalMs) {
-    await pool.query('UPDATE sessions SET last_seen_at = NOW() WHERE token_hash = $1', [hashToken(token)])
+  let lastSeenAt = row.last_seen_at
+  if (now - row.last_seen_at.getTime() >= sessionTouchIntervalMs) {
+    lastSeenAt = new Date(now)
+    void pool.query('UPDATE sessions SET last_seen_at = NOW() WHERE token_hash = $1 AND revoked_at IS NULL', [tokenHash]).catch(() => undefined)
   }
-  return { user: { id: row.user_id, username: row.username, isAdmin: row.is_admin }, token, expiresAt: row.expires_at, lastSeenAt: row.last_seen_at, csrfToken: '', csrfTokenHash: row.csrf_token_hash }
+  const session: Session = { user: { id: row.user_id, username: row.username, isAdmin: row.is_admin }, token, expiresAt: row.expires_at, lastSeenAt, csrfToken: '', csrfTokenHash: row.csrf_token_hash }
+  if (sessionCache.size >= MAX_CACHED_SESSIONS) {
+    const oldestKey = sessionCache.keys().next().value
+    if (oldestKey) sessionCache.delete(oldestKey)
+  }
+  sessionCache.set(tokenHash, { session, cachedAt: now })
+  return session
 }
 
 export function verifyCsrf(request: FastifyRequest, session: Session): boolean {
@@ -81,10 +102,16 @@ export function verifyCsrf(request: FastifyRequest, session: Session): boolean {
 }
 
 export async function revokeSession(token: string | undefined): Promise<void> {
-  if (token) await pool.query('UPDATE sessions SET revoked_at = NOW() WHERE token_hash = $1 AND revoked_at IS NULL', [hashToken(token)])
+  if (!token) return
+  const tokenHash = hashToken(token)
+  sessionCache.delete(tokenHash)
+  await pool.query('UPDATE sessions SET revoked_at = NOW() WHERE token_hash = $1 AND revoked_at IS NULL', [tokenHash])
 }
 
 export async function revokeAllSessions(userId: string): Promise<void> {
+  for (const [key, entry] of sessionCache.entries()) {
+    if (entry.session.user.id === userId) sessionCache.delete(key)
+  }
   await pool.query('UPDATE sessions SET revoked_at = NOW() WHERE user_id = $1 AND revoked_at IS NULL', [userId])
 }
 

@@ -146,7 +146,6 @@ export async function buildApp(dependencies: AppDependencies = {}): Promise<Fast
   app.addHook('preHandler', async (request, reply) => {
     if (request.url === '/health' || request.url === '/health/live' || request.url === '/health/ready' || request.url === '/metrics' || request.url.startsWith('/api/v1/auth/')) return
     const session = await auth.requireAuth(request, reply)
-    if (session) await authService.touchSession(session)
     if (session && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(request.method) && !verifyCsrf(request, session)) {
       return reply.code(403).send({ error: 'CSRF validation failed' })
     }

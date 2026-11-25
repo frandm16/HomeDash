@@ -91,8 +91,8 @@ export function BookmarkFavicon({ url, icon, name }: { url: string; icon?: strin
 }
 
 export function RadialGauge({ label, percent, detail, color = '#6ea8ff', compact = false }: { label: string; percent: number | null; detail?: string; color?: string; compact?: boolean }) {
-  const radius = compact ? 27 : 38
-  const stroke = compact ? 4.5 : 6
+  const radius = compact ? 24 : 38
+  const stroke = compact ? 4 : 6
   const normalizedRadius = radius - stroke * 2
   const circumference = normalizedRadius * 2 * Math.PI
   const numericPercent = percent === null ? 0 : Math.min(100, Math.max(0, percent))

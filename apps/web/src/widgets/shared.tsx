@@ -90,9 +90,9 @@ export function BookmarkFavicon({ url, icon, name }: { url: string; icon?: strin
   return <span className="bookmark-icon fallback-letter">{(name || 'B').slice(0, 1).toUpperCase()}</span>
 }
 
-export function RadialGauge({ label, percent, detail, color = '#6ea8ff' }: { label: string; percent: number | null; detail?: string; color?: string }) {
-  const radius = 38
-  const stroke = 6
+export function RadialGauge({ label, percent, detail, color = '#6ea8ff', compact = false }: { label: string; percent: number | null; detail?: string; color?: string; compact?: boolean }) {
+  const radius = compact ? 27 : 38
+  const stroke = compact ? 4.5 : 6
   const normalizedRadius = radius - stroke * 2
   const circumference = normalizedRadius * 2 * Math.PI
   const numericPercent = percent === null ? 0 : Math.min(100, Math.max(0, percent))
@@ -103,7 +103,7 @@ export function RadialGauge({ label, percent, detail, color = '#6ea8ff' }: { lab
   else if (percent !== null && percent >= 70) statusColor = '#f2c276'
 
   return (
-    <div className="radial-gauge-item" title={`${label}: ${percent === null ? 'N/A' : `${percent}%`}${detail ? ` (${detail})` : ''}`}>
+    <div className={`radial-gauge-item${compact ? ' compact' : ''}`} title={`${label}: ${percent === null ? 'N/A' : `${percent}%`}${detail ? ` (${detail})` : ''}`}>
       <div className="radial-gauge-svg-wrap">
         <svg height={radius * 2} width={radius * 2} className="radial-gauge-svg">
           <circle

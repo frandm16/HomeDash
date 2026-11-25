@@ -1449,7 +1449,8 @@ select:focus-visible, textarea:focus-visible {
 
 .legend-item.cpu-legend i { background: #6ea8ff; box-shadow: 0 0 6px #6ea8ff; }
 .legend-item.ram-legend i { background: #93d7a1; box-shadow: 0 0 6px #93d7a1; }
-.legend-item.gpu-legend i { background: #d4a3ff; box-shadow: 0 0 6px #d4a3ff; }
+.legend-item.gpu-legend i,
+.legend-item.disk-legend i { background: #d4a3ff; box-shadow: 0 0 6px #d4a3ff; }
 
 .legend-item strong {
   color: #fff;
@@ -1524,6 +1525,159 @@ select:focus-visible, textarea:focus-visible {
 .kpi-value.warn {
   color: var(--warn);
   text-shadow: 0 0 10px rgba(242, 194, 118, 0.4);
+}
+
+/* Multi-node stacked view (Proxmox Host + VM + LXC) */
+.performance-widget.multi-node {
+  justify-content: flex-start;
+  overflow: hidden;
+}
+
+.perf-nodes-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  height: 100%;
+  overflow-y: auto;
+  padding-right: 2px;
+  scrollbar-width: thin;
+}
+
+.perf-node-block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.perf-node-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.perf-node-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.perf-node-badge {
+  font: 700 8px var(--mono);
+  letter-spacing: 0.6px;
+  padding: 2px 5px;
+  border-radius: 6px;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+
+.perf-node-badge.kind-host {
+  background: rgba(110, 168, 255, 0.2);
+  color: #a9ccff;
+  border: 1px solid rgba(110, 168, 255, 0.35);
+}
+
+.perf-node-badge.kind-vm {
+  background: rgba(147, 215, 161, 0.18);
+  color: #b4e8bf;
+  border: 1px solid rgba(147, 215, 161, 0.35);
+}
+
+.perf-node-badge.kind-lxc {
+  background: rgba(212, 163, 255, 0.18);
+  color: #e3c4ff;
+  border: 1px solid rgba(212, 163, 255, 0.35);
+}
+
+.perf-node-name {
+  font: 600 11px var(--sans);
+  color: #eef5ff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.perf-node-vmid {
+  font: 10px var(--mono);
+  color: #9fb3cc;
+  flex-shrink: 0;
+}
+
+.perf-radial-grid.compact {
+  gap: 6px;
+  height: auto;
+}
+
+.radial-gauge-item.compact {
+  gap: 2px;
+}
+
+.radial-gauge-item.compact .radial-gauge-center strong {
+  font-size: 11px;
+}
+
+.radial-gauge-item.compact .radial-gauge-label {
+  font-size: 9px;
+}
+
+.radial-gauge-item.compact .radial-gauge-detail {
+  font-size: 8px;
+}
+
+.perf-kpi-grid.compact {
+  height: auto;
+  gap: 6px;
+}
+
+.kpi-stat-card.compact {
+  padding: 5px 6px;
+  border-radius: 10px;
+}
+
+.kpi-stat-card.compact .kpi-label {
+  font-size: 9px;
+  margin-bottom: 1px;
+}
+
+.kpi-stat-card.compact .kpi-value {
+  font-size: 14px;
+}
+
+.perf-guest-summary-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.perf-guest-summary-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 8px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.perf-guest-inline-metrics {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font: 9px var(--mono);
+  color: #aabcd2;
+  flex-shrink: 0;
+}
+
+.perf-guest-inline-metrics strong {
+  color: #fff;
 }
 
 /* 4. Horizontal Bars */

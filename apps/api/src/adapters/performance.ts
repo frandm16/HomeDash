@@ -1,5 +1,7 @@
 import os from 'node:os'
 import fs from 'node:fs'
+import { config } from '../config.js'
+import { fetchProxmoxNodes, isProxmoxConfigured } from './proxmox.js'
 
 export type PerformanceMetricKey = 'cpu' | 'ram' | 'gpu' | 'storage' | 'network'
 
@@ -10,6 +12,18 @@ export type PerformanceMetric = {
   unit: string
   state: 'ready' | 'empty' | 'offline' | 'stale' | 'not_configured'
   detail?: string
+}
+
+export type PerformanceNodeKind = 'host' | 'vm' | 'lxc'
+
+export type PerformanceNodeSnapshot = {
+  id: string
+  name: string
+  kind: PerformanceNodeKind
+  status: 'online' | 'offline' | 'stopped' | 'unknown'
+  vmid?: number
+  uptimeSeconds?: number
+  metrics: PerformanceMetric[]
 }
 
 export type MetricHistoryPoint = {
@@ -24,6 +38,8 @@ export type PerformanceSnapshot = {
   generatedAt: string
   sourceState: 'ready' | 'offline' | 'stale' | 'not_configured'
   history: MetricHistoryPoint[]
+  nodes?: PerformanceNodeSnapshot[]
+  provider?: 'proxmox' | 'local'
 }
 
 // In-memory ring buffer for historical data points (sparklines/graphs)
@@ -107,23 +123,57 @@ async function getDiskMetric(): Promise<{ percent: number; detail: string }> {
   return cachedDiskMetric?.value ?? { percent: 45, detail: '45% used' }
 }
 
-export async function collectPerformanceSnapshot(): Promise<PerformanceSnapshot> {
-  const cpuPercent = calculateCpuPercent()
-  const ram = getRamMetric()
-  const disk = await getDiskMetric()
-  const nowIso = new Date().toISOString()
-
-  // Push real sample to history buffer
+function pushHistorySample(timestamp: string, cpu: number | null, ram: number | null): void {
   historyBuffer.push({
-    timestamp: nowIso,
-    cpu: cpuPercent,
-    ram: ram.percent,
+    timestamp,
+    cpu,
+    ram,
     gpu: null,
   })
 
   if (historyBuffer.length > MAX_HISTORY_POINTS) {
     historyBuffer.shift()
   }
+}
+
+export async function collectPerformanceSnapshot(): Promise<PerformanceSnapshot> {
+  const nowIso = new Date().toISOString()
+
+  const proxmoxCfg = {
+    url: config.proxmoxUrl,
+    tokenId: config.proxmoxTokenId,
+    tokenSecret: config.proxmoxTokenSecret,
+    node: config.proxmoxNode || undefined,
+    insecureTls: config.proxmoxInsecureTls,
+    timeoutMs: config.proxmoxTimeoutMs,
+  }
+
+  if (isProxmoxConfigured(proxmoxCfg)) {
+    const { nodes, sourceState } = await fetchProxmoxNodes(proxmoxCfg)
+    const primary = nodes[0]
+    const primaryMetrics = primary?.metrics ?? []
+    const primaryCpu = primaryMetrics.find((m) => m.key === 'cpu')?.value ?? null
+    const primaryRam = primaryMetrics.find((m) => m.key === 'ram')?.value ?? null
+
+    if (primary) {
+      pushHistorySample(nowIso, primaryCpu, primaryRam)
+    }
+
+    return {
+      metrics: primaryMetrics,
+      nodes,
+      provider: 'proxmox',
+      generatedAt: nowIso,
+      sourceState,
+      history: [...historyBuffer],
+    }
+  }
+
+  const cpuPercent = calculateCpuPercent()
+  const ram = getRamMetric()
+  const disk = await getDiskMetric()
+
+  pushHistorySample(nowIso, cpuPercent, ram.percent)
 
   const metrics: PerformanceMetric[] = [
     {
@@ -143,14 +193,6 @@ export async function collectPerformanceSnapshot(): Promise<PerformanceSnapshot>
       detail: ram.detail,
     },
     {
-      key: 'gpu',
-      label: 'GPU',
-      value: null,
-      unit: '%',
-      state: 'not_configured',
-      detail: 'No GPU sensor configured',
-    },
-    {
       key: 'storage',
       label: 'Disk',
       value: disk.percent,
@@ -160,8 +202,18 @@ export async function collectPerformanceSnapshot(): Promise<PerformanceSnapshot>
     },
   ]
 
+  const localNode: PerformanceNodeSnapshot = {
+    id: 'local',
+    name: os.hostname() || 'homelab',
+    kind: 'host',
+    status: 'online',
+    metrics,
+  }
+
   return {
     metrics,
+    nodes: [localNode],
+    provider: 'local',
     generatedAt: nowIso,
     sourceState: 'ready',
     history: [...historyBuffer],

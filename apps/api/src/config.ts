@@ -44,5 +44,11 @@ export const config = {
   databaseUrl,
   sessionTtlDays: asPositiveNumber('SESSION_TTL_DAYS', process.env.SESSION_TTL_DAYS, 30),
   notificationCenterTimeoutMs: asPositiveNumber('NOTIFICATION_CENTER_TIMEOUT_MS', process.env.NOTIFICATION_CENTER_TIMEOUT_MS, 5000),
+  proxmoxUrl: (process.env.PROXMOX_URL ?? '').trim().replace(/\/+$/, ''),
+  proxmoxTokenId: (process.env.PROXMOX_TOKEN_ID ?? '').trim(),
+  proxmoxTokenSecret: (process.env.PROXMOX_TOKEN_SECRET ?? '').trim(),
+  proxmoxNode: (process.env.PROXMOX_NODE ?? '').trim(),
+  proxmoxInsecureTls: process.env.PROXMOX_INSECURE_TLS === 'true',
+  proxmoxTimeoutMs: asPositiveNumber('PROXMOX_TIMEOUT_MS', process.env.PROXMOX_TIMEOUT_MS, 5000),
   logLevel: process.env.LOG_LEVEL ?? 'info',
 }

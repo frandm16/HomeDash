@@ -27,6 +27,7 @@ import {
 import { findOpenLayout, GRID_COLUMNS, GRID_ROWS, moveWidget } from './grid'
 import { Icon } from './Icon'
 import { widgetRegistry } from './widgets/registry'
+import { getWidgetAppearance } from './widgets/types'
 import type { WidgetData, WidgetRenderProps } from './widgets/types'
 import './App.css'
 
@@ -774,19 +775,7 @@ function Dashboard({
             const definition = widgetRegistry[widget.widgetType]
             const hasRedirect = Boolean(widget.configuration.redirectUrl) && !editing
 
-            const bgStyle = String(widget.configuration.backgroundStyle ?? 'glass')
-            const accentColor = String(widget.configuration.accentColor ?? 'default')
-            const ACCENT_MAP: Record<string, string> = {
-              default: '#6ea8ff',
-              purple: '#a78bfa',
-              emerald: '#34d399',
-              amber: '#fbbf24',
-              rose: '#fb7185',
-              cyan: '#22d3ee'
-            }
-            const widgetStyleVars: React.CSSProperties = {
-              ...(accentColor !== 'default' ? { '--accent': ACCENT_MAP[accentColor] ?? ACCENT_MAP.default, '--accent-soft': `${ACCENT_MAP[accentColor] ?? ACCENT_MAP.default}33` } as React.CSSProperties : {}),
-            }
+            const { bgStyle, styleVars: widgetStyleVars } = getWidgetAppearance(widget.configuration)
 
             const isPerfWidget = widget.widgetType === 'homelab-performance' || widget.widgetType.startsWith('performance')
             const isDashWidget = widget.widgetType.startsWith('notifications') || widget.widgetType === 'service-status'

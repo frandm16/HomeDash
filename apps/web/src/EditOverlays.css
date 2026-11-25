@@ -82,9 +82,15 @@
   box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.4);
 }
 
+.live-preview-shell {
+  width: 100%;
+  max-width: 100%;
+}
+
 .live-preview-box .widget-card {
   width: 100%;
   max-width: 100%;
+  transition: background 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease, backdrop-filter 0.25s ease;
 }
 
 .preview-hint {

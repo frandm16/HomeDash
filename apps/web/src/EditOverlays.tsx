@@ -10,6 +10,7 @@ import {
 } from './api'
 import { Icon, type IconName } from './Icon'
 import { widgetRegistry } from './widgets/registry'
+import { getWidgetAppearance } from './widgets/types'
 import { BookmarkFavicon } from './widgets/shared'
 import type { WidgetData } from './widgets/types'
 import './EditOverlays.css'
@@ -642,18 +643,27 @@ export function WidgetSettings({
           </div>
 
           <div className="dialog-preview-col">
-            <p className="kicker">LIVE GLASS PREVIEW</p>
-            <div className="live-preview-box">
-              {PreviewComponent && (
-                <PreviewComponent
-                  widgetId={widget.id}
-                  data={data}
-                  state="ready"
-                  editing={false}
-                  configuration={config}
-                />
-              )}
-            </div>
+            {(() => {
+              const { bgStyle, bgLabel, styleVars } = getWidgetAppearance(config)
+              return (
+                <>
+                  <p className="kicker">LIVE PREVIEW · {bgLabel.toUpperCase()}</p>
+                  <div className="live-preview-box">
+                    <div className={`live-preview-shell widget-bg-${bgStyle}`} style={styleVars}>
+                      {PreviewComponent && (
+                        <PreviewComponent
+                          widgetId={widget.id}
+                          data={data}
+                          state="ready"
+                          editing={false}
+                          configuration={config}
+                        />
+                      )}
+                    </div>
+                  </div>
+                </>
+              )
+            })()}
             <p className="subtle preview-hint">
               This preview updates live. Changes will only apply to this specific widget instance.
             </p>

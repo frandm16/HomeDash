@@ -5,6 +5,7 @@
   "scripts": {
     "dev:web": "npm --prefix apps/web run dev",
     "build:web": "npm --prefix apps/web run build",
+    "build:extension": "npm --prefix apps/web run build:extension",
     "lint:web": "npm --prefix apps/web run lint",
     "dev:api": "npm --prefix apps/api run dev",
     "build:api": "npm --prefix apps/api run build",

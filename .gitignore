@@ -14,9 +14,11 @@ node_modules/
 
 # Build output
 dist/
+dist-extension/
 build/
 coverage/
 .vite/
+homedash-firefox-extension.zip
 
 # Runtime and local data
 *.log
